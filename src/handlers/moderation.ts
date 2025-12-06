@@ -138,9 +138,11 @@ function getActionFromStatusChange(
   oldStatus: PresetStatus,
   newStatus: PresetStatus
 ): 'approve' | 'reject' | 'flag' | 'unflag' {
+  // Unflag: flagged -> approved
+  if (oldStatus === 'flagged' && newStatus === 'approved') return 'unflag';
+  // Standard status changes
   if (newStatus === 'approved') return 'approve';
   if (newStatus === 'rejected') return 'reject';
   if (newStatus === 'flagged') return 'flag';
-  if (oldStatus === 'flagged' && newStatus === 'approved') return 'unflag';
-  return 'approve'; // Default fallback
+  return 'approve'; // Default fallback (e.g., pending -> approved)
 }
