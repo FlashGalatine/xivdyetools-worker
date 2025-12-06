@@ -38,10 +38,13 @@ app.use(
   cors({
     origin: (origin, c) => {
       const allowedOrigin = c.env.CORS_ORIGIN;
-      // Allow configured origin, localhost for dev, and no origin (direct API calls)
+      // Additional allowed origins (custom domain)
+      const additionalOrigins = ['https://xivdyetools.projectgalatine.com'];
+      // Allow configured origin, additional origins, localhost for dev, and no origin (direct API calls)
       if (
         !origin ||
         origin === allowedOrigin ||
+        additionalOrigins.includes(origin) ||
         origin.startsWith('http://localhost:') ||
         origin.startsWith('http://127.0.0.1:')
       ) {
