@@ -15,7 +15,7 @@ local_protocol = "http"
 [[d1_databases]]
 binding = "DB"
 database_name = "xivdyetools-presets"
-database_id = "placeholder-will-be-updated-after-creation"
+database_id = "e17d68a1-5a44-4c88-b02b-07d053cbe321"
 
 # Environment variables (non-secret)
 [vars]
@@ -31,7 +31,7 @@ vars = { ENVIRONMENT = "production", API_VERSION = "v1", CORS_ORIGIN = "https://
 [[env.production.d1_databases]]
 binding = "DB"
 database_name = "xivdyetools-presets"
-database_id = "placeholder-will-be-updated-after-creation"
+database_id = "e17d68a1-5a44-4c88-b02b-07d053cbe321"
 
 # Rate limiting configuration (built into worker logic)
 # - Public endpoints: 100 req/min per IP
