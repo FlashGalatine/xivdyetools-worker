@@ -1,0 +1,52 @@
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [1.0.0] - 2025-12-07
+
+### Added
+
+#### API Endpoints
+
+**Public:**
+- `GET /api/v1/presets` - List presets with filtering and pagination
+- `GET /api/v1/presets/featured` - Top 10 presets by vote count
+- `GET /api/v1/presets/:id` - Get single preset details
+- `GET /api/v1/categories` - List categories with preset counts
+
+**Authenticated (Bot/Web):**
+- `POST /api/v1/presets` - Submit new preset
+- `POST /api/v1/votes/:id` - Vote for a preset
+- `DELETE /api/v1/votes/:id` - Remove vote
+
+**Moderator:**
+- `GET /api/v1/moderation/pending` - List pending presets for review
+- `PATCH /api/v1/moderation/:id/status` - Approve/reject preset
+- `GET /api/v1/moderation/:id/history` - View moderation audit log
+
+#### Features
+- **Voting System**: User voting with deduplication (one vote per user per preset)
+- **Preset Categories**: Organized browsing by theme/category
+- **Search**: Full-text search across name, description, and tags
+- **Pagination**: Configurable page size (max 100) with cursor-based pagination
+- **Sorting**: By popularity, recency, or alphabetical
+
+#### Content Moderation
+- **Local Profanity Filter**: Multi-language bad word detection
+- **Perspective API**: Optional ML-based toxicity detection (Google API)
+- **Moderation Workflow**: Pending → Approved/Rejected/Flagged status flow
+- **Audit Logging**: Full history of moderation actions with reasons
+
+#### Authentication
+- **Dual Auth Support**:
+  - Bot API: Bearer token (BOT_API_SECRET) + X-User-Discord-ID header
+  - Web App: JWT bearer token from OAuth worker
+- **Moderator Verification**: MODERATOR_IDS environment variable for admin access
+
+#### Infrastructure
+- **Cloudflare D1**: SQLite-compatible database for preset storage
+- **Hono Framework**: Fast, lightweight routing
+- **Service Binding Ready**: Direct worker-to-worker communication support
