@@ -58,21 +58,6 @@ presetsRouter.get('/featured', async (c) => {
   return c.json({ presets });
 });
 
-/**
- * GET /api/v1/presets/:id
- * Get a single preset by ID
- */
-presetsRouter.get('/:id', async (c) => {
-  const id = c.req.param('id');
-  const preset = await getPresetById(c.env.DB, id);
-
-  if (!preset) {
-    return c.json({ error: 'Not Found', message: 'Preset not found' }, 404);
-  }
-
-  return c.json(preset);
-});
-
 // ============================================
 // AUTHENTICATED ENDPOINTS
 // ============================================
@@ -122,6 +107,56 @@ presetsRouter.get('/rate-limit', async (c) => {
     limit: 10,
     reset_at: resetAt.toISOString(),
   });
+});
+
+/**
+ * PATCH /api/v1/presets/refresh-author
+ * Update all presets by the authenticated user to use their current display name
+ * Called automatically on web app login to keep author names in sync with Discord
+ */
+presetsRouter.patch('/refresh-author', async (c) => {
+  // Require authentication
+  const authError = requireAuth(c);
+  if (authError) return authError;
+
+  // Require user context
+  const userError = requireUserContext(c);
+  if (userError) return userError;
+
+  const auth = c.get('auth');
+
+  // Update all presets by this user to use their current display name
+  const result = await c.env.DB.prepare(`
+    UPDATE presets
+    SET author_name = ?
+    WHERE author_discord_id = ?
+  `)
+    .bind(auth.userName, auth.userDiscordId)
+    .run();
+
+  return c.json({
+    success: true,
+    updated: result.meta.changes,
+  });
+});
+
+// ============================================
+// DYNAMIC ID ROUTE (must be after specific routes)
+// ============================================
+
+/**
+ * GET /api/v1/presets/:id
+ * Get a single preset by ID
+ */
+presetsRouter.get('/:id', async (c) => {
+  const id = c.req.param('id');
+  const preset = await getPresetById(c.env.DB, id);
+
+  if (!preset) {
+    return c.json({ error: 'Not Found', message: 'Preset not found' }, 404);
+  }
+
+  return c.json(preset);
 });
 
 /**
