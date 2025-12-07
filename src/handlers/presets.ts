@@ -4,7 +4,7 @@
  */
 
 import { Hono } from 'hono';
-import type { Env, AuthContext, PresetFilters, PresetSubmission } from '../types.js';
+import type { Env, AuthContext, PresetFilters, PresetSubmission, PresetEditRequest, PresetPreviousValues } from '../types.js';
 import { requireAuth, requireUserContext } from '../middleware/auth.js';
 import {
   getPresets,
@@ -12,7 +12,9 @@ import {
   getPresetById,
   getPresetsByUser,
   findDuplicatePreset,
+  findDuplicatePresetExcluding,
   createPreset,
+  updatePreset,
 } from '../services/preset-service.js';
 import { moderateContent } from '../services/moderation-service.js';
 import { addVote } from './votes.js';
@@ -181,6 +183,138 @@ presetsRouter.delete('/:id', async (c) => {
 });
 
 /**
+ * PATCH /api/v1/presets/:id
+ * Edit a preset (owner only)
+ */
+presetsRouter.patch('/:id', async (c) => {
+  // Require authentication
+  const authError = requireAuth(c);
+  if (authError) return authError;
+
+  // Require user context
+  const userError = requireUserContext(c);
+  if (userError) return userError;
+
+  const auth = c.get('auth');
+  const id = c.req.param('id');
+
+  // Get preset to check ownership
+  const preset = await getPresetById(c.env.DB, id);
+  if (!preset) {
+    return c.json({ error: 'Not Found', message: 'Preset not found' }, 404);
+  }
+
+  // Only owner can edit (moderators cannot edit others' presets)
+  if (preset.author_discord_id !== auth.userDiscordId) {
+    return c.json({ error: 'Forbidden', message: 'You can only edit your own presets' }, 403);
+  }
+
+  // Parse request body
+  let body: PresetEditRequest;
+  try {
+    body = await c.req.json<PresetEditRequest>();
+  } catch {
+    return c.json({ error: 'Bad Request', message: 'Invalid JSON body' }, 400);
+  }
+
+  // Check if any updates provided
+  if (!body.name && !body.description && !body.dyes && !body.tags) {
+    return c.json({ error: 'Bad Request', message: 'No updates provided' }, 400);
+  }
+
+  // Validate provided fields
+  const validationError = validateEditRequest(body);
+  if (validationError) {
+    return c.json({ error: 'Validation Error', message: validationError }, 400);
+  }
+
+  // If dyes are being changed, check for duplicates (excluding this preset)
+  if (body.dyes) {
+    const duplicate = await findDuplicatePresetExcluding(c.env.DB, body.dyes, id);
+    if (duplicate) {
+      return c.json(
+        {
+          success: false,
+          error: 'duplicate_dyes',
+          message: 'This dye combination already exists',
+          duplicate: {
+            id: duplicate.id,
+            name: duplicate.name,
+            author_name: duplicate.author_name,
+          },
+        },
+        409
+      );
+    }
+  }
+
+  // Determine if content moderation is needed (name or description changed)
+  let moderationStatus: 'approved' | 'pending' = 'approved';
+  let previousValues: PresetPreviousValues | undefined;
+
+  if (body.name || body.description) {
+    // Run content moderation on new values
+    const nameToCheck = body.name || preset.name;
+    const descriptionToCheck = body.description || preset.description;
+
+    const moderationResult = await moderateContent(
+      nameToCheck,
+      descriptionToCheck,
+      c.env
+    );
+
+    if (!moderationResult.passed) {
+      // Store previous values for potential revert
+      previousValues = {
+        name: preset.name,
+        description: preset.description,
+        tags: preset.tags,
+        dyes: preset.dyes,
+      };
+      moderationStatus = 'pending';
+    }
+  }
+
+  // Update the preset
+  const updatedPreset = await updatePreset(
+    c.env.DB,
+    id,
+    body,
+    previousValues,
+    moderationStatus === 'pending' ? 'pending' : undefined
+  );
+
+  if (!updatedPreset) {
+    return c.json({ error: 'Server Error', message: 'Failed to update preset' }, 500);
+  }
+
+  // If flagged, notify Discord for moderation
+  if (moderationStatus === 'pending') {
+    c.executionCtx.waitUntil(
+      notifyDiscordBot(c.env, {
+        type: 'submission',
+        preset: {
+          ...updatedPreset,
+          author_name: preset.author_name || 'Unknown User',
+          author_discord_id: preset.author_discord_id,
+          status: 'pending',
+          moderation_status: 'flagged',
+          source: auth.authSource,
+        },
+      }).catch((err) => {
+        console.error('Failed to notify Discord worker:', err);
+      })
+    );
+  }
+
+  return c.json({
+    success: true,
+    preset: updatedPreset,
+    moderation_status: moderationStatus,
+  });
+});
+
+/**
  * GET /api/v1/presets/:id
  * Get a single preset by ID
  */
@@ -346,6 +480,47 @@ function validateSubmission(body: PresetSubmission): string | null {
   }
   if (body.tags.some((tag) => typeof tag !== 'string' || tag.length > 30)) {
     return 'Each tag must be a string of max 30 characters';
+  }
+
+  return null;
+}
+
+function validateEditRequest(body: PresetEditRequest): string | null {
+  // Name validation (2-50 chars) - only if provided
+  if (body.name !== undefined) {
+    if (body.name.length < 2 || body.name.length > 50) {
+      return 'Name must be 2-50 characters';
+    }
+  }
+
+  // Description validation (10-200 chars) - only if provided
+  if (body.description !== undefined) {
+    if (body.description.length < 10 || body.description.length > 200) {
+      return 'Description must be 10-200 characters';
+    }
+  }
+
+  // Dyes validation (2-5 dyes) - only if provided
+  if (body.dyes !== undefined) {
+    if (!Array.isArray(body.dyes) || body.dyes.length < 2 || body.dyes.length > 5) {
+      return 'Must include 2-5 dyes';
+    }
+    if (!body.dyes.every((id) => typeof id === 'number' && id > 0)) {
+      return 'Invalid dye IDs';
+    }
+  }
+
+  // Tags validation (0-10 tags, max 30 chars each) - only if provided
+  if (body.tags !== undefined) {
+    if (!Array.isArray(body.tags)) {
+      return 'Tags must be an array';
+    }
+    if (body.tags.length > 10) {
+      return 'Maximum 10 tags allowed';
+    }
+    if (body.tags.some((tag) => typeof tag !== 'string' || tag.length > 30)) {
+      return 'Each tag must be a string of max 30 characters';
+    }
   }
 
   return null;
