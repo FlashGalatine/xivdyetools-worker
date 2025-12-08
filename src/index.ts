@@ -113,6 +113,14 @@ app.get('/health', (c) => {
   return c.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// Test-only route to exercise global error handler without exposing in production
+app.get('/__force-error', (c) => {
+  if (c.env.ENVIRONMENT === 'production') {
+    return c.json({ error: 'Not Found' }, 404);
+  }
+  throw new Error('forced error');
+});
+
 // ============================================
 // API ROUTES
 // ============================================
