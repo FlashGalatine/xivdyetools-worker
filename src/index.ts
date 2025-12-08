@@ -16,6 +16,7 @@ import { moderationRouter } from './handlers/moderation.js';
 
 // Import middleware
 import { authMiddleware } from './middleware/auth.js';
+import { publicRateLimitMiddleware } from './middleware/rate-limit.js';
 
 // Extend Hono context with our custom variables
 type Variables = {
@@ -83,10 +84,14 @@ app.use(
     },
     allowMethods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
     allowHeaders: ['Content-Type', 'Authorization', 'X-User-Discord-ID', 'X-User-Discord-Name'],
-    exposeHeaders: ['X-RateLimit-Remaining', 'X-RateLimit-Reset'],
+    exposeHeaders: ['X-RateLimit-Limit', 'X-RateLimit-Remaining', 'X-RateLimit-Reset', 'Retry-After'],
     maxAge: 86400,
   })
 );
+
+// Public rate limiting middleware (100 req/min per IP)
+// Applied before auth to protect against unauthenticated abuse
+app.use('/api/*', publicRateLimitMiddleware);
 
 // Authentication middleware (sets auth context)
 app.use('*', authMiddleware);

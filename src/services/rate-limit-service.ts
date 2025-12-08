@@ -2,9 +2,101 @@
  * Rate Limit Service
  * Tracks submission limits per user per day
  * Limit: 10 submissions per user per day
+ *
+ * Also provides IP-based rate limiting for public endpoints
+ * Limit: 100 requests per minute per IP (sliding window)
  */
 
 import type { RateLimitResult } from '../types.js';
+
+// ============================================
+// IP-BASED RATE LIMITING (PUBLIC ENDPOINTS)
+// ============================================
+
+/**
+ * Configuration for public endpoint rate limiting
+ */
+const PUBLIC_RATE_LIMIT = {
+  maxRequests: 100, // Maximum requests per window
+  windowMs: 60_000, // Window size: 1 minute
+};
+
+/**
+ * In-memory store for IP rate limiting
+ * Maps IP -> array of request timestamps
+ * Note: Resets on worker restart, which is acceptable for defense-in-depth
+ */
+const ipRequestLog = new Map<string, number[]>();
+
+/**
+ * Clean up old entries periodically to prevent memory leaks
+ * Called during rate limit checks
+ */
+function cleanupOldEntries(): void {
+  const cutoff = Date.now() - PUBLIC_RATE_LIMIT.windowMs * 2;
+  // Use forEach instead of for...of to avoid needing downlevelIteration
+  ipRequestLog.forEach((timestamps, ip) => {
+    const filtered = timestamps.filter((ts) => ts > cutoff);
+    if (filtered.length === 0) {
+      ipRequestLog.delete(ip);
+    } else {
+      ipRequestLog.set(ip, filtered);
+    }
+  });
+}
+
+/**
+ * Check if an IP is within rate limits for public endpoints
+ * Uses sliding window algorithm
+ *
+ * @param ip - Client IP address (from CF-Connecting-IP header)
+ * @returns Rate limit result with allowed status and remaining requests
+ */
+export function checkPublicRateLimit(ip: string): RateLimitResult {
+  const now = Date.now();
+  const windowStart = now - PUBLIC_RATE_LIMIT.windowMs;
+
+  // Get existing timestamps for this IP
+  const timestamps = ipRequestLog.get(ip) || [];
+
+  // Filter to only include requests within the current window
+  const recentTimestamps = timestamps.filter((ts) => ts > windowStart);
+
+  // Check if within limit
+  const allowed = recentTimestamps.length < PUBLIC_RATE_LIMIT.maxRequests;
+  const remaining = Math.max(0, PUBLIC_RATE_LIMIT.maxRequests - recentTimestamps.length);
+
+  // Calculate reset time (when the oldest request in window expires)
+  const oldestInWindow = recentTimestamps[0];
+  const resetAt = oldestInWindow
+    ? new Date(oldestInWindow + PUBLIC_RATE_LIMIT.windowMs)
+    : new Date(now + PUBLIC_RATE_LIMIT.windowMs);
+
+  // Record this request if allowed
+  if (allowed) {
+    recentTimestamps.push(now);
+    ipRequestLog.set(ip, recentTimestamps);
+  }
+
+  // Periodically clean up old entries (roughly every 100 requests)
+  if (Math.random() < 0.01) {
+    cleanupOldEntries();
+  }
+
+  return { allowed, remaining, resetAt };
+}
+
+/**
+ * Get client IP from request headers
+ * Uses CF-Connecting-IP which Cloudflare sets to the real client IP
+ *
+ * @param request - The incoming request
+ * @returns Client IP or 'unknown' if not found
+ */
+export function getClientIp(request: Request): string {
+  // CF-Connecting-IP is set by Cloudflare to the real client IP
+  return request.headers.get('CF-Connecting-IP') || request.headers.get('X-Forwarded-For')?.split(',')[0]?.trim() || 'unknown';
+}
 
 /**
  * Maximum submissions per user per day
