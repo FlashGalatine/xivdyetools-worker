@@ -17,9 +17,11 @@ export interface Env {
   ENVIRONMENT: string;
   API_VERSION: string;
   CORS_ORIGIN: string;
+  ADDITIONAL_CORS_ORIGINS?: string; // Comma-separated additional allowed origins
 
   // Secrets (set via wrangler secret put)
   BOT_API_SECRET: string;
+  BOT_SIGNING_SECRET?: string; // HMAC signing key for bot request verification
   MODERATOR_IDS: string;
   PERSPECTIVE_API_KEY?: string;
   MODERATION_WEBHOOK_URL?: string;

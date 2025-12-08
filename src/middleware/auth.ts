@@ -11,6 +11,57 @@ type Variables = {
 };
 
 // ============================================
+// HMAC REQUEST SIGNING (Bot Auth Security)
+// ============================================
+
+/**
+ * Verify HMAC signature for bot requests
+ * This prevents header spoofing attacks by cryptographically
+ * binding the user headers to the request
+ *
+ * Signature format: HMAC-SHA256(timestamp:userDiscordId:userName)
+ */
+async function verifyBotRequestSignature(
+  signature: string | undefined,
+  timestamp: string | undefined,
+  userDiscordId: string | undefined,
+  userName: string | undefined,
+  signingSecret: string
+): Promise<boolean> {
+  if (!signature || !timestamp) return false;
+
+  // Reject requests older than 5 minutes to prevent replay attacks
+  const requestTime = parseInt(timestamp, 10);
+  const now = Math.floor(Date.now() / 1000);
+  if (isNaN(requestTime) || Math.abs(now - requestTime) > 300) {
+    return false;
+  }
+
+  // Recreate the signed message
+  const message = `${timestamp}:${userDiscordId || ''}:${userName || ''}`;
+
+  try {
+    const encoder = new TextEncoder();
+    const key = await crypto.subtle.importKey(
+      'raw',
+      encoder.encode(signingSecret),
+      { name: 'HMAC', hash: 'SHA-256' },
+      false,
+      ['verify']
+    );
+
+    // Decode hex signature
+    const signatureBytes = new Uint8Array(
+      signature.match(/.{1,2}/g)?.map((byte) => parseInt(byte, 16)) || []
+    );
+
+    return await crypto.subtle.verify('HMAC', key, signatureBytes, encoder.encode(message));
+  } catch {
+    return false;
+  }
+}
+
+// ============================================
 // JWT VERIFICATION (Web Auth)
 // ============================================
 
@@ -42,7 +93,8 @@ function base64UrlDecode(str: string): string {
 }
 
 /**
- * Verify JWT signature and expiration
+ * Verify JWT signature, algorithm, and expiration
+ * SECURITY: Validates algorithm to prevent JWT algorithm confusion attacks
  */
 async function verifyJWT(token: string, secret: string): Promise<JWTPayload | null> {
   try {
@@ -50,6 +102,19 @@ async function verifyJWT(token: string, secret: string): Promise<JWTPayload | nu
     if (parts.length !== 3) return null;
 
     const [encodedHeader, encodedPayload, signature] = parts;
+
+    // SECURITY: Validate JWT algorithm before signature verification
+    // This prevents algorithm confusion attacks (e.g., "alg": "none")
+    try {
+      const header = JSON.parse(base64UrlDecode(encodedHeader));
+      if (header.alg !== 'HS256') {
+        console.warn('JWT verification failed: Invalid algorithm', { alg: header.alg });
+        return null;
+      }
+    } catch {
+      console.warn('JWT verification failed: Could not parse header');
+      return null;
+    }
 
     // Verify signature using HMAC-SHA256
     const encoder = new TextEncoder();
@@ -137,13 +202,50 @@ export async function authMiddleware(
 
     // Method 1: Bot authentication (BOT_API_SECRET)
     if (token === c.env.BOT_API_SECRET) {
-      auth = {
-        isAuthenticated: true,
-        isModerator: checkModerator(userDiscordId, c.env.MODERATOR_IDS),
-        userDiscordId: userDiscordId || undefined,
-        userName: userName || undefined,
-        authSource: 'bot',
-      };
+      // SECURITY: When BOT_SIGNING_SECRET is configured, require HMAC signature
+      // This prevents header spoofing attacks where an attacker with the API secret
+      // could set arbitrary X-User-Discord-ID headers to impersonate users
+      if (c.env.BOT_SIGNING_SECRET) {
+        const signature = c.req.header('X-Request-Signature');
+        const timestamp = c.req.header('X-Request-Timestamp');
+
+        const isValidSignature = await verifyBotRequestSignature(
+          signature,
+          timestamp,
+          userDiscordId,
+          userName,
+          c.env.BOT_SIGNING_SECRET
+        );
+
+        if (!isValidSignature) {
+          // Log failed signature attempts (but don't reveal details)
+          console.warn('Bot auth: Invalid or missing request signature', {
+            hasSignature: !!signature,
+            hasTimestamp: !!timestamp,
+            path: c.req.path,
+          });
+          // Don't authenticate - let the request proceed as unauthenticated
+          // The route handler will return 401 if auth is required
+        } else {
+          auth = {
+            isAuthenticated: true,
+            isModerator: checkModerator(userDiscordId, c.env.MODERATOR_IDS),
+            userDiscordId: userDiscordId || undefined,
+            userName: userName || undefined,
+            authSource: 'bot',
+          };
+        }
+      } else {
+        // Legacy mode: No signing secret configured
+        // WARNING: This trusts user-supplied headers - configure BOT_SIGNING_SECRET for security
+        auth = {
+          isAuthenticated: true,
+          isModerator: checkModerator(userDiscordId, c.env.MODERATOR_IDS),
+          userDiscordId: userDiscordId || undefined,
+          userName: userName || undefined,
+          authSource: 'bot',
+        };
+      }
     }
     // Method 2: Web authentication (JWT)
     else if (c.env.JWT_SECRET) {
