@@ -45,13 +45,32 @@ CREATE TABLE IF NOT EXISTS presets (
   FOREIGN KEY (category_id) REFERENCES categories(id)
 );
 
--- Indexes for common query patterns
+-- Indexes for common query patterns (single column)
 CREATE INDEX IF NOT EXISTS idx_presets_category ON presets(category_id);
 CREATE INDEX IF NOT EXISTS idx_presets_status ON presets(status);
 CREATE INDEX IF NOT EXISTS idx_presets_vote_count ON presets(vote_count DESC);
 CREATE INDEX IF NOT EXISTS idx_presets_author ON presets(author_discord_id);
 CREATE INDEX IF NOT EXISTS idx_presets_created ON presets(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_presets_curated ON presets(is_curated);
+
+-- PERFORMANCE: Composite indexes for filtered + sorted queries
+-- These allow SQLite to satisfy both WHERE and ORDER BY from the index
+-- Order: equality columns first, then sort columns
+
+-- For: WHERE status = 'approved' AND category_id = ? ORDER BY vote_count DESC
+CREATE INDEX IF NOT EXISTS idx_presets_status_category_vote ON presets(status, category_id, vote_count DESC);
+
+-- For: WHERE status = 'approved' ORDER BY vote_count DESC (popular presets)
+CREATE INDEX IF NOT EXISTS idx_presets_status_vote ON presets(status, vote_count DESC);
+
+-- For: WHERE status = 'approved' ORDER BY created_at DESC (recent presets)
+CREATE INDEX IF NOT EXISTS idx_presets_status_created ON presets(status, created_at DESC);
+
+-- For: WHERE author_discord_id = ? ORDER BY created_at DESC (user's presets)
+CREATE INDEX IF NOT EXISTS idx_presets_author_created ON presets(author_discord_id, created_at DESC);
+
+-- For: Full-text search optimization (name lookups)
+CREATE INDEX IF NOT EXISTS idx_presets_name ON presets(name);
 
 -- Note: D1 doesn't support generated columns, so we'll compute dye_signature in application code
 -- The signature is computed by sorting dye IDs and JSON stringifying: [1,12,40] -> "[1,12,40]"
