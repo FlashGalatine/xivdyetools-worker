@@ -40,16 +40,30 @@ app.use(
       const allowedOrigin = c.env.CORS_ORIGIN;
       // Additional allowed origins (custom domain)
       const additionalOrigins = ['https://xivdyetools.projectgalatine.com'];
-      // Allow configured origin, additional origins, localhost for dev, and no origin (direct API calls)
-      if (
-        !origin ||
-        origin === allowedOrigin ||
-        additionalOrigins.includes(origin) ||
-        origin.startsWith('http://localhost:') ||
-        origin.startsWith('http://127.0.0.1:')
-      ) {
-        return origin || '*';
+
+      // SECURITY: Don't allow requests without an Origin header
+      // (server-to-server calls should use API keys, not CORS)
+      if (!origin) {
+        return null;
       }
+
+      // Allow configured origin and additional production origins
+      if (origin === allowedOrigin || additionalOrigins.includes(origin)) {
+        return origin;
+      }
+
+      // SECURITY: Only allow specific localhost ports in development
+      // This prevents malicious apps on other localhost ports from making requests
+      const allowedDevOrigins = [
+        'http://localhost:5173',   // Vite dev server
+        'http://127.0.0.1:5173',   // Vite dev server (IP)
+        'http://localhost:8787',   // Wrangler local dev
+        'http://127.0.0.1:8787',   // Wrangler local dev (IP)
+      ];
+      if (allowedDevOrigins.includes(origin)) {
+        return origin;
+      }
+
       return null;
     },
     allowMethods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
