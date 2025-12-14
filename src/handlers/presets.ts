@@ -257,8 +257,10 @@ presetsRouter.patch('/:id', async (c) => {
   }
 
   // Determine if content moderation is needed (name or description changed)
+  // PRESETS-BUG-003: Vote counts are preserved during edits - this is intentional
+  // as users voted on the dye combination, not just the name/description.
   let moderationStatus: 'approved' | 'pending' = 'approved';
-  let previousValues: PresetPreviousValues | undefined;
+  let previousValues: PresetPreviousValues | null | undefined;
 
   if (body.name || body.description) {
     // Run content moderation on new values
@@ -280,16 +282,22 @@ presetsRouter.patch('/:id', async (c) => {
         dyes: preset.dyes,
       };
       moderationStatus = 'pending';
+    } else {
+      // PRESETS-BUG-002: When moderation passes, explicitly clear previous_values
+      // This ensures presets that were previously flagged can be fully un-flagged
+      previousValues = null;
     }
   }
 
   // Update the preset
+  // PRESETS-BUG-002: Always pass moderation status so that presets
+  // previously flagged can be un-flagged when the user fixes the content
   const updatedPreset = await updatePreset(
     c.env.DB,
     id,
     body,
     previousValues,
-    moderationStatus === 'pending' ? 'pending' : undefined
+    moderationStatus
   );
 
   if (!updatedPreset) {
@@ -383,7 +391,12 @@ presetsRouter.post('/', async (c) => {
     return c.json({ error: 'Validation Error', message: validationError }, 400);
   }
 
-  // Check for duplicate
+  // PRESETS-BUG-001: Check for duplicate dye combinations
+  // Note: This check-then-create pattern has a theoretical race condition where
+  // two concurrent requests with the same dyes could both pass the check and both
+  // create presets. A future improvement would be to add a UNIQUE constraint on
+  // dye_signature and handle the constraint violation with retry logic.
+  // For now, the moderation queue and daily rate limit (10/day) make this edge case rare.
   const duplicate = await findDuplicatePreset(c.env.DB, body.dyes);
   if (duplicate) {
     // Add vote to existing preset
