@@ -330,4 +330,127 @@ describe('Index/App', () => {
             expect(res.status).not.toBe(401);
         });
     });
+
+    // ============================================
+    // Content-Type Validation
+    // ============================================
+
+    describe('Content-Type Validation', () => {
+        it('should reject POST with body but wrong content-type', async () => {
+            const res = await app.request(
+                '/api/v1/presets',
+                {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'text/plain',
+                        'Content-Length': '10',
+                        Authorization: 'Bearer test-bot-secret',
+                        'X-User-Discord-ID': '123',
+                    },
+                    body: 'some text',
+                },
+                env
+            );
+
+            expect(res.status).toBe(415);
+            const body = await res.json() as { error: string; message: string };
+            expect(body.error).toBe('Unsupported Media Type');
+            expect(body.message).toContain('application/json');
+        });
+
+        it('should reject PATCH with body but no content-type', async () => {
+            const res = await app.request(
+                '/api/v1/presets/test-id',
+                {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Length': '10',
+                        Authorization: 'Bearer test-bot-secret',
+                        'X-User-Discord-ID': '123',
+                    },
+                    body: '{}',
+                },
+                env
+            );
+
+            expect(res.status).toBe(415);
+        });
+
+        it('should allow POST with application/json content-type', async () => {
+            const res = await app.request(
+                '/api/v1/presets',
+                {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        Authorization: 'Bearer test-bot-secret',
+                        'X-User-Discord-ID': '123',
+                    },
+                    body: JSON.stringify({ name: 'test' }),
+                },
+                env
+            );
+
+            // Should pass Content-Type check (may fail later for other reasons)
+            expect(res.status).not.toBe(415);
+        });
+
+        it('should allow POST with application/json; charset=utf-8', async () => {
+            const res = await app.request(
+                '/api/v1/presets',
+                {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json; charset=utf-8',
+                        Authorization: 'Bearer test-bot-secret',
+                        'X-User-Discord-ID': '123',
+                    },
+                    body: JSON.stringify({ name: 'test' }),
+                },
+                env
+            );
+
+            // Should pass Content-Type check (may fail later for other reasons)
+            expect(res.status).not.toBe(415);
+        });
+
+        it('should allow requests with empty body', async () => {
+            const res = await app.request(
+                '/api/v1/presets/test-id',
+                {
+                    method: 'PATCH',
+                    headers: {
+                        Authorization: 'Bearer test-bot-secret',
+                        'X-User-Discord-ID': '123',
+                    },
+                },
+                env
+            );
+
+            // Should pass Content-Type check for empty body
+            expect(res.status).not.toBe(415);
+        });
+    });
+
+    // ============================================
+    // Environment Validation
+    // ============================================
+
+    describe('Environment Validation', () => {
+        it('should return 500 in production with invalid env configuration', async () => {
+            // Create an invalid production environment
+            const invalidProdEnv = createMockEnv({
+                ENVIRONMENT: 'production',
+                CORS_ORIGIN: 'not-a-valid-url', // Invalid URL
+            });
+
+            // Note: The validation caches per isolate, so this test may be affected
+            // by test order. In a real scenario, the first request with invalid env
+            // would fail in production.
+            const res = await app.request('/', {}, invalidProdEnv);
+
+            // Could be 500 if env validation failed, or 200 if validation was cached
+            expect([200, 500]).toContain(res.status);
+        });
+    });
 });

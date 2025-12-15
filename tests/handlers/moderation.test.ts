@@ -400,6 +400,67 @@ describe('ModerationHandler', () => {
             expect(body.message).toContain('no previous values');
         });
 
+        it('should return 400 for invalid JSON body', async () => {
+            const mockRow = createMockPresetRow({ previous_values: '{}' });
+            mockDb._setupMock(() => mockRow);
+
+            const res = await app.request(
+                '/api/v1/moderation/preset-123/revert',
+                {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        Authorization: 'Bearer test-bot-secret',
+                        'X-User-Discord-ID': '123456789',
+                    },
+                    body: 'not valid json',
+                },
+                env
+            );
+
+            expect(res.status).toBe(400);
+            const body = await res.json() as { error: string; message: string };
+            expect(body.error).toBe('Bad Request');
+            expect(body.message).toContain('Invalid JSON');
+        });
+
+        it('should return 500 if revert operation fails', async () => {
+            const mockRow = createMockPresetRow({
+                id: 'preset-123',
+                previous_values: JSON.stringify({ name: 'Original' }),
+            });
+
+            let callCount = 0;
+            mockDb._setupMock((query) => {
+                callCount++;
+                // First call: getPresetById (returns preset with previous_values)
+                if (callCount === 1) return mockRow;
+                // Second call: revertPreset UPDATE
+                if (query.includes('UPDATE')) return { success: true };
+                // Third call: fetch reverted preset returns null (simulating failure)
+                return null;
+            });
+
+            const res = await app.request(
+                '/api/v1/moderation/preset-123/revert',
+                {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        Authorization: 'Bearer test-bot-secret',
+                        'X-User-Discord-ID': '123456789',
+                    },
+                    body: JSON.stringify({ reason: 'Valid revert reason here' }),
+                },
+                env
+            );
+
+            expect(res.status).toBe(500);
+            const body = await res.json() as { error: string; message: string };
+            expect(body.error).toBe('Server Error');
+            expect(body.message).toBe('Failed to revert preset');
+        });
+
         it('should return 404 if preset not found', async () => {
             mockDb._setupMock(() => null);
 

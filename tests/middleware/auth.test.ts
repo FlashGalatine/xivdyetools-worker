@@ -186,6 +186,29 @@ describe('AuthMiddleware', () => {
             expect(body.isAuthenticated).toBe(true);
             expect(body.userDiscordId).toBeUndefined();
         });
+
+        it('should reject bot auth in production when BOT_SIGNING_SECRET is not configured', async () => {
+            // In production, BOT_SIGNING_SECRET is required for bot auth
+            const prodEnv = createMockEnv({
+                ENVIRONMENT: 'production',
+                BOT_SIGNING_SECRET: undefined, // Not configured
+            });
+
+            const res = await app.request(
+                '/test/auth',
+                {
+                    headers: {
+                        Authorization: 'Bearer test-bot-secret',
+                        'X-User-Discord-ID': '123456789',
+                    },
+                },
+                prodEnv
+            );
+            const body = await res.json() as AuthContext;
+
+            // Should NOT be authenticated because BOT_SIGNING_SECRET is required in production
+            expect(body.isAuthenticated).toBe(false);
+        });
     });
 
     // ============================================
