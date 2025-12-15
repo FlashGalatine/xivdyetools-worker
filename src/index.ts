@@ -5,7 +5,7 @@
 
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
-import { logger } from 'hono/logger';
+import type { ExtendedLogger } from '@xivdyetools/logger';
 import type { Env, AuthContext } from './types.js';
 
 // Import route handlers
@@ -18,12 +18,14 @@ import { moderationRouter } from './handlers/moderation.js';
 import { authMiddleware } from './middleware/auth.js';
 import { publicRateLimitMiddleware } from './middleware/rate-limit.js';
 import { requestIdMiddleware, getRequestId } from './middleware/request-id.js';
+import { loggerMiddleware, getLogger } from './middleware/logger.js';
 import { validateEnv, logValidationErrors } from './utils/env-validation.js';
 
 // Extend Hono context with our custom variables
 type Variables = {
   auth: AuthContext;
   requestId: string;
+  logger: ExtendedLogger;
 };
 
 // Create Hono app with typed bindings
@@ -36,11 +38,11 @@ let envValidated = false;
 // GLOBAL MIDDLEWARE
 // ============================================
 
-// Request logging
-app.use('*', logger());
-
 // Request ID middleware (must be early for tracing)
 app.use('*', requestIdMiddleware);
+
+// Structured request logger (after request ID for correlation)
+app.use('*', loggerMiddleware);
 
 // Environment validation middleware
 // Validates required env vars once per isolate and caches result
@@ -55,7 +57,10 @@ app.use('*', async (c, next) => {
         return c.json({ error: 'Service misconfigured' }, 500);
       }
       // In development, log warnings but continue
-      console.warn('Continuing with invalid env configuration (development mode)');
+      const logger = getLogger(c);
+      if (logger) {
+        logger.warn('Continuing with invalid env configuration (development mode)');
+      }
     }
   }
   await next();
@@ -200,12 +205,18 @@ app.notFound((c) => {
 // Global error handler
 app.onError((err, c) => {
   const requestId = getRequestId(c);
+  const logger = getLogger(c);
   // Don't expose internal errors in production
   const isDev = c.env.ENVIRONMENT === 'development';
 
-  // Sanitize logs in production - only log error name and message, not full stack
-  const logMessage = isDev ? err : { name: err.name, message: err.message };
-  console.error(`[${requestId}] Unhandled error:`, logMessage);
+  // Use structured logger if available
+  if (logger) {
+    logger.error('Unhandled error', err, { operation: 'globalErrorHandler' });
+  } else {
+    // Fallback to console if logger not available
+    const logMessage = isDev ? err : { name: err.name, message: err.message };
+    console.error(`[${requestId}] Unhandled error:`, logMessage);
+  }
 
   return c.json(
     {
