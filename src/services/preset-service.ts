@@ -317,7 +317,7 @@ export async function updatePreset(
   db: D1Database,
   id: string,
   updates: PresetEditRequest,
-  previousValues?: PresetPreviousValues,
+  previousValues?: PresetPreviousValues | null,
   newStatus?: 'approved' | 'pending'
 ): Promise<CommunityPreset | null> {
   const now = new Date().toISOString();

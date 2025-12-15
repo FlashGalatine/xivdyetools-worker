@@ -1,9 +1,40 @@
 /**
  * XIV Dye Tools Worker - Type Definitions
+ *
+ * Re-exports shared types from @xivdyetools/types and defines
+ * project-specific types for the presets API worker.
  */
 
 // ============================================
-// CLOUDFLARE BINDINGS
+// RE-EXPORT SHARED TYPES
+// ============================================
+
+// Preset types
+export type {
+  PresetStatus,
+  PresetCategory,
+  CategoryMeta,
+  CommunityPreset,
+  PresetPreviousValues,
+  PresetSubmission,
+  PresetFilters,
+  PresetEditRequest,
+  PresetListResponse,
+  PresetSubmitResponse,
+  PresetEditResponse,
+  VoteResponse,
+  ModerationResponse,
+  CategoryListResponse,
+} from '@xivdyetools/types';
+
+// Auth types
+export type { AuthSource, AuthContext } from '@xivdyetools/types';
+
+// API types
+export type { ModerationResult, ModerationLogEntry, RateLimitResult } from '@xivdyetools/types';
+
+// ============================================
+// CLOUDFLARE BINDINGS (Project-specific)
 // ============================================
 
 export interface Env {
@@ -37,161 +68,7 @@ export interface Env {
 }
 
 // ============================================
-// PRESET TYPES
-// ============================================
-
-export type PresetStatus = 'pending' | 'approved' | 'rejected' | 'flagged';
-
-export type PresetCategory =
-  | 'jobs'
-  | 'grand-companies'
-  | 'seasons'
-  | 'events'
-  | 'aesthetics'
-  | 'community';
-
-export interface CategoryMeta {
-  id: string;
-  name: string;
-  description: string;
-  icon: string | null;
-  is_curated: boolean;
-  display_order: number;
-  preset_count?: number;
-}
-
-export interface CommunityPreset {
-  id: string;
-  name: string;
-  description: string;
-  category_id: PresetCategory;
-  dyes: number[];
-  tags: string[];
-  author_discord_id: string | null;
-  author_name: string | null;
-  vote_count: number;
-  status: PresetStatus;
-  is_curated: boolean;
-  created_at: string;
-  updated_at: string;
-  dye_signature?: string;
-  previous_values?: PresetPreviousValues | null;
-}
-
-/**
- * Stores pre-edit values for moderation revert capability
- */
-export interface PresetPreviousValues {
-  name: string;
-  description: string;
-  tags: string[];
-  dyes: number[];
-}
-
-export interface PresetSubmission {
-  name: string;
-  description: string;
-  category_id: PresetCategory;
-  dyes: number[];
-  tags: string[];
-}
-
-/**
- * Request body for editing a preset
- */
-export interface PresetEditRequest {
-  name?: string;          // 2-50 characters
-  description?: string;   // 10-200 characters
-  dyes?: number[];        // 2-5 dye IDs
-  tags?: string[];        // 0-10 tags, max 30 chars each
-}
-
-/**
- * Response from preset edit endpoint
- */
-export interface PresetEditResponse {
-  success: boolean;
-  preset?: CommunityPreset;
-  moderation_status?: 'approved' | 'pending';
-  duplicate?: {
-    id: string;
-    name: string;
-    author_name: string | null;
-  };
-  error?: string;
-}
-
-// ============================================
-// API REQUEST/RESPONSE TYPES
-// ============================================
-
-export interface PresetFilters {
-  category?: PresetCategory;
-  search?: string;
-  status?: PresetStatus;
-  sort?: 'popular' | 'recent' | 'name';
-  page?: number;
-  limit?: number;
-  is_curated?: boolean;
-}
-
-export interface PresetListResponse {
-  presets: CommunityPreset[];
-  total: number;
-  page: number;
-  limit: number;
-  has_more: boolean;
-}
-
-export interface PresetSubmitResponse {
-  success: boolean;
-  preset?: CommunityPreset;
-  duplicate?: CommunityPreset;
-  vote_added?: boolean;
-  moderation_status?: 'approved' | 'pending';
-  error?: string;
-}
-
-export interface VoteResponse {
-  success: boolean;
-  new_vote_count: number;
-  already_voted?: boolean;
-  error?: string;
-}
-
-export interface ModerationResponse {
-  success: boolean;
-  preset?: CommunityPreset;
-  error?: string;
-}
-
-export interface CategoryListResponse {
-  categories: CategoryMeta[];
-}
-
-// ============================================
-// MODERATION TYPES
-// ============================================
-
-export interface ModerationResult {
-  passed: boolean;
-  flaggedField?: 'name' | 'description' | 'content';
-  flaggedReason?: string;
-  method: 'local' | 'perspective' | 'all';
-  scores?: Record<string, number>;
-}
-
-export interface ModerationLogEntry {
-  id: string;
-  preset_id: string;
-  moderator_discord_id: string;
-  action: 'approve' | 'reject' | 'flag' | 'unflag' | 'revert';
-  reason: string | null;
-  created_at: string;
-}
-
-// ============================================
-// DATABASE ROW TYPES (raw from D1)
+// DATABASE ROW TYPES (Raw from D1)
 // ============================================
 
 export interface PresetRow {
@@ -225,24 +102,4 @@ export interface VoteRow {
   preset_id: string;
   user_discord_id: string;
   created_at: string;
-}
-
-// ============================================
-// UTILITY TYPES
-// ============================================
-
-export type AuthSource = 'none' | 'bot' | 'web';
-
-export interface AuthContext {
-  isAuthenticated: boolean;
-  isModerator: boolean;
-  userDiscordId?: string;
-  userName?: string;
-  authSource: AuthSource;
-}
-
-export interface RateLimitResult {
-  allowed: boolean;
-  remaining: number;
-  resetAt: Date;
 }
