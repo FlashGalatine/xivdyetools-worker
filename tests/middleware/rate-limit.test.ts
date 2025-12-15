@@ -77,7 +77,7 @@ describe('PublicRateLimitMiddleware', () => {
         );
 
         expect(res.status).toBe(429);
-        const body = await res.json();
+        const body = await res.json() as { error: string; message: string; retryAfter: number };
         expect(body.error).toBe('Too Many Requests');
         expect(body.message).toContain('Rate limit exceeded');
         expect(body.retryAfter).toBeDefined();

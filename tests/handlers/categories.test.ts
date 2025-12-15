@@ -6,7 +6,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { Hono } from 'hono';
 import { categoriesRouter } from '../../src/handlers/categories';
 import { authMiddleware } from '../../src/middleware/auth';
-import type { Env, AuthContext } from '../../src/types';
+import type { Env, AuthContext, CategoryMeta } from '../../src/types';
 import {
     createMockEnv,
     createMockD1Database,
@@ -51,7 +51,7 @@ describe('CategoriesHandler', () => {
             const res = await app.request('/api/v1/categories', {}, env);
 
             expect(res.status).toBe(200);
-            const body = await res.json();
+            const body = await res.json() as { categories: CategoryMeta[] };
 
             expect(body.categories).toHaveLength(3);
             expect(body.categories[0].preset_count).toBe(15);
@@ -73,7 +73,7 @@ describe('CategoriesHandler', () => {
             mockDb._setupMock(() => mockRows);
 
             const res = await app.request('/api/v1/categories', {}, env);
-            const body = await res.json();
+            const body = await res.json() as { categories: CategoryMeta[] };
 
             expect(body.categories[0]).toEqual({
                 id: 'jobs',
@@ -94,7 +94,7 @@ describe('CategoriesHandler', () => {
             mockDb._setupMock(() => mockRows);
 
             const res = await app.request('/api/v1/categories', {}, env);
-            const body = await res.json();
+            const body = await res.json() as { categories: CategoryMeta[] };
 
             expect(body.categories[0].is_curated).toBe(false);
             expect(body.categories[1].is_curated).toBe(true);
@@ -104,7 +104,7 @@ describe('CategoriesHandler', () => {
             mockDb._setupMock(() => []);
 
             const res = await app.request('/api/v1/categories', {}, env);
-            const body = await res.json();
+            const body = await res.json() as { categories: CategoryMeta[] };
 
             expect(body.categories).toEqual([]);
         });
@@ -127,7 +127,7 @@ describe('CategoriesHandler', () => {
             mockDb._setupMock(() => mockRows);
 
             const res = await app.request('/api/v1/categories', {}, env);
-            const body = await res.json();
+            const body = await res.json() as { categories: CategoryMeta[] };
 
             expect(body.categories[0].preset_count).toBe(0);
         });
@@ -177,7 +177,7 @@ describe('CategoriesHandler', () => {
             const res = await app.request('/api/v1/categories/jobs', {}, env);
 
             expect(res.status).toBe(200);
-            const body = await res.json();
+            const body = await res.json() as CategoryMeta;
 
             expect(body.id).toBe('jobs');
             expect(body.name).toBe('Jobs');
@@ -190,7 +190,7 @@ describe('CategoriesHandler', () => {
             const res = await app.request('/api/v1/categories/nonexistent', {}, env);
 
             expect(res.status).toBe(404);
-            const body = await res.json();
+            const body = await res.json() as { error: string; message: string };
 
             expect(body.error).toBe('Not Found');
             expect(body.message).toBe('Category not found');
@@ -204,7 +204,7 @@ describe('CategoriesHandler', () => {
             mockDb._setupMock(() => mockRow);
 
             const res = await app.request('/api/v1/categories/test', {}, env);
-            const body = await res.json();
+            const body = await res.json() as CategoryMeta;
 
             expect(body.is_curated).toBe(true);
         });
@@ -217,7 +217,7 @@ describe('CategoriesHandler', () => {
             mockDb._setupMock(() => mockRow);
 
             const res = await app.request('/api/v1/categories/test', {}, env);
-            const body = await res.json();
+            const body = await res.json() as CategoryMeta;
 
             expect(body.preset_count).toBe(0);
         });
@@ -230,7 +230,7 @@ describe('CategoriesHandler', () => {
             mockDb._setupMock(() => mockRow);
 
             const res = await app.request('/api/v1/categories/test', {}, env);
-            const body = await res.json();
+            const body = await res.json() as CategoryMeta;
 
             expect(body.icon).toBeNull();
         });
@@ -318,7 +318,7 @@ describe('CategoriesHandler', () => {
             mockDb._setupMock(() => mockRow);
 
             const res = await app.request('/api/v1/categories/grand-companies', {}, env);
-            const body = await res.json();
+            const body = await res.json() as CategoryMeta;
 
             expect(body.id).toBe('grand-companies');
         });

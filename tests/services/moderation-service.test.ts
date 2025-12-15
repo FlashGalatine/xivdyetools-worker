@@ -60,41 +60,42 @@ describe('ModerationService', () => {
     // ============================================
 
     describe('compileProfanityPatterns', () => {
-        it('should compile word lists into RegExp patterns', () => {
+        it('should compile word lists into CompiledProfanity structure', () => {
             const wordLists = {
                 en: ['bad', 'word'],
                 de: ['schlecht'],
             };
 
-            const patterns = compileProfanityPatterns(wordLists);
+            const compiled = compileProfanityPatterns(wordLists);
 
-            expect(patterns).toHaveLength(3);
-            expect(patterns[0]).toBeInstanceOf(RegExp);
+            expect(compiled.wordSet.size).toBe(3);
+            expect(compiled.combinedPattern).toBeInstanceOf(RegExp);
         });
 
         it('should create case-insensitive patterns', () => {
-            const patterns = compileProfanityPatterns({ en: ['test'] });
+            const compiled = compileProfanityPatterns({ en: ['test'] });
 
-            expect(patterns[0].test('TEST')).toBe(true);
-            expect(patterns[0].test('Test')).toBe(true);
-            expect(patterns[0].test('test')).toBe(true);
+            expect(compiled.combinedPattern?.test('TEST')).toBe(true);
+            expect(compiled.combinedPattern?.test('Test')).toBe(true);
+            expect(compiled.combinedPattern?.test('test')).toBe(true);
         });
 
         it('should use word boundary matching', () => {
-            const patterns = compileProfanityPatterns({ en: ['bad'] });
+            const compiled = compileProfanityPatterns({ en: ['bad'] });
 
             // Should match whole word
-            expect(patterns[0].test('bad')).toBe(true);
-            expect(patterns[0].test('very bad word')).toBe(true);
+            expect(compiled.combinedPattern?.test('bad')).toBe(true);
+            expect(compiled.combinedPattern?.test('very bad word')).toBe(true);
 
             // Should NOT match partial words
-            expect(patterns[0].test('badger')).toBe(false);
-            expect(patterns[0].test('notbad')).toBe(false);
+            expect(compiled.combinedPattern?.test('badger')).toBe(false);
+            expect(compiled.combinedPattern?.test('notbad')).toBe(false);
         });
 
         it('should handle empty word lists', () => {
-            const patterns = compileProfanityPatterns({});
-            expect(patterns).toHaveLength(0);
+            const compiled = compileProfanityPatterns({});
+            expect(compiled.wordSet.size).toBe(0);
+            expect(compiled.combinedPattern).toBeNull();
         });
     });
 
@@ -104,14 +105,14 @@ describe('ModerationService', () => {
 
     describe('checkLocalFilter', () => {
         it('should return null for clean content with custom patterns', () => {
-            const patterns = [/\bbadword\b/i];
-            const result = checkLocalFilter('Good Name', 'Nice description', patterns);
+            _setTestPatterns([/\bbadword\b/i]);
+            const result = checkLocalFilter('Good Name', 'Nice description');
             expect(result).toBeNull();
         });
 
         it('should flag content matching custom pattern in name', () => {
-            const patterns = [/\bbadword\b/i];
-            const result = checkLocalFilter('This is badword here', 'Clean description', patterns);
+            _setTestPatterns([/\bbadword\b/i]);
+            const result = checkLocalFilter('This is badword here', 'Clean description');
 
             expect(result).not.toBeNull();
             expect(result!.passed).toBe(false);
@@ -120,8 +121,8 @@ describe('ModerationService', () => {
         });
 
         it('should flag content matching custom pattern in description only', () => {
-            const patterns = [/\bbadword\b/i];
-            const result = checkLocalFilter('Clean Name', 'This has badword in it', patterns);
+            _setTestPatterns([/\bbadword\b/i]);
+            const result = checkLocalFilter('Clean Name', 'This has badword in it');
 
             expect(result).not.toBeNull();
             expect(result!.passed).toBe(false);
@@ -130,10 +131,10 @@ describe('ModerationService', () => {
         });
 
         it('should check against multiple patterns', () => {
-            const patterns = [/\bword1\b/i, /\bword2\b/i, /\bword3\b/i];
+            _setTestPatterns([/\bword1\b/i, /\bword2\b/i, /\bword3\b/i]);
 
             // First pattern doesn't match, second does
-            const result = checkLocalFilter('Contains word2', 'Description', patterns);
+            const result = checkLocalFilter('Contains word2', 'Description');
 
             expect(result).not.toBeNull();
             expect(result!.passed).toBe(false);
@@ -142,8 +143,8 @@ describe('ModerationService', () => {
         it('should use injected patterns when set via _setTestPatterns', () => {
             _setTestPatterns([/\btestbadword\b/i]);
 
-            // Now checkLocalFilter without explicit patterns should use injected ones
-            const result = checkLocalFilter('Has testbadword', 'Clean', undefined);
+            // Now checkLocalFilter should use injected patterns
+            const result = checkLocalFilter('Has testbadword', 'Clean');
 
             expect(result).not.toBeNull();
             expect(result!.passed).toBe(false);
@@ -154,19 +155,20 @@ describe('ModerationService', () => {
             _setTestPatterns([/\btestbadword\b/i]);
             _resetPatternsForTesting();
 
-            // After reset, should use default empty patterns
-            const result = checkLocalFilter('Has testbadword', 'Clean', undefined);
+            // After reset, should use default production patterns (may or may not flag)
+            // Since production patterns are populated, test with innocuous content
+            const result = checkLocalFilter('Hello', 'World');
 
-            // With empty default patterns, nothing should be flagged
+            // Innocuous content should not be flagged
             expect(result).toBeNull();
         });
 
         it('should handle case insensitivity correctly', () => {
-            const patterns = [/\bBADWORD\b/i];
+            _setTestPatterns([/\bBADWORD\b/i]);
 
-            const result1 = checkLocalFilter('badword', 'Clean', patterns);
-            const result2 = checkLocalFilter('BADWORD', 'Clean', patterns);
-            const result3 = checkLocalFilter('BadWord', 'Clean', patterns);
+            const result1 = checkLocalFilter('badword', 'Clean');
+            const result2 = checkLocalFilter('BADWORD', 'Clean');
+            const result3 = checkLocalFilter('BadWord', 'Clean');
 
             expect(result1).not.toBeNull();
             expect(result2).not.toBeNull();

@@ -6,7 +6,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { Hono } from 'hono';
 import { moderationRouter } from '../../src/handlers/moderation';
 import { authMiddleware } from '../../src/middleware/auth';
-import type { Env, AuthContext } from '../../src/types';
+import type { Env, AuthContext, CommunityPreset, ModerationLogEntry } from '../../src/types';
 import {
     createMockEnv,
     createMockD1Database,
@@ -117,7 +117,7 @@ describe('ModerationHandler', () => {
             );
 
             expect(res.status).toBe(200);
-            const body = await res.json();
+            const body = await res.json() as { presets: CommunityPreset[]; total: number };
 
             expect(body.presets).toHaveLength(2);
             expect(body.total).toBe(2);
@@ -138,7 +138,7 @@ describe('ModerationHandler', () => {
             );
 
             expect(res.status).toBe(200);
-            const body = await res.json();
+            const body = await res.json() as { presets: CommunityPreset[]; total: number };
 
             expect(body.presets).toEqual([]);
             expect(body.total).toBe(0);
@@ -169,7 +169,7 @@ describe('ModerationHandler', () => {
             );
 
             expect(res.status).toBe(200);
-            const body = await res.json();
+            const body = await res.json() as { success: boolean };
 
             expect(body.success).toBe(true);
         });
@@ -236,7 +236,7 @@ describe('ModerationHandler', () => {
             );
 
             expect(res.status).toBe(400);
-            const body = await res.json();
+            const body = await res.json() as { error: string };
             expect(body.error).toBe('Validation Error');
         });
 
@@ -369,7 +369,7 @@ describe('ModerationHandler', () => {
             );
 
             expect(res.status).toBe(200);
-            const body = await res.json();
+            const body = await res.json() as { success: boolean; message: string };
             expect(body.success).toBe(true);
             expect(body.message).toBe('Preset reverted to previous values');
         });
@@ -396,7 +396,7 @@ describe('ModerationHandler', () => {
             );
 
             expect(res.status).toBe(400);
-            const body = await res.json();
+            const body = await res.json() as { message: string };
             expect(body.message).toContain('no previous values');
         });
 
@@ -440,7 +440,7 @@ describe('ModerationHandler', () => {
             );
 
             expect(res1.status).toBe(400);
-            const body1 = await res1.json();
+            const body1 = await res1.json() as { message: string };
             expect(body1.message).toContain('10-200 characters');
 
             // Too long
@@ -545,7 +545,7 @@ describe('ModerationHandler', () => {
             );
 
             expect(res.status).toBe(200);
-            const body = await res.json();
+            const body = await res.json() as { history: ModerationLogEntry[] };
 
             expect(body.history).toHaveLength(2);
         });
@@ -565,7 +565,7 @@ describe('ModerationHandler', () => {
             );
 
             expect(res.status).toBe(200);
-            const body = await res.json();
+            const body = await res.json() as { history: ModerationLogEntry[] };
 
             expect(body.history).toEqual([]);
         });
@@ -613,7 +613,7 @@ describe('ModerationHandler', () => {
             );
 
             expect(res.status).toBe(200);
-            const body = await res.json();
+            const body = await res.json() as { stats: { pending: number; approved: number; rejected: number; flagged: number; actions_last_week: number } };
 
             expect(body.stats.pending).toBe(5);
             expect(body.stats.approved).toBe(100);

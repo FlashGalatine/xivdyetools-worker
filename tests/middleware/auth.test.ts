@@ -61,7 +61,7 @@ describe('AuthMiddleware', () => {
     describe('Unauthenticated Access', () => {
         it('should set unauthenticated context when no auth header', async () => {
             const res = await app.request('/test/auth', {}, env);
-            const body = await res.json();
+            const body = await res.json() as AuthContext;
 
             expect(body.isAuthenticated).toBe(false);
             expect(body.isModerator).toBe(false);
@@ -76,7 +76,7 @@ describe('AuthMiddleware', () => {
                 },
                 env
             );
-            const body = await res.json();
+            const body = await res.json() as AuthContext;
 
             expect(body.isAuthenticated).toBe(false);
         });
@@ -89,7 +89,7 @@ describe('AuthMiddleware', () => {
                 },
                 env
             );
-            const body = await res.json();
+            const body = await res.json() as AuthContext;
 
             expect(body.isAuthenticated).toBe(false);
         });
@@ -112,7 +112,7 @@ describe('AuthMiddleware', () => {
                 },
                 env
             );
-            const body = await res.json();
+            const body = await res.json() as AuthContext;
 
             expect(body.isAuthenticated).toBe(true);
             expect(body.authSource).toBe('bot');
@@ -131,7 +131,7 @@ describe('AuthMiddleware', () => {
                 },
                 env
             );
-            const body = await res.json();
+            const body = await res.json() as AuthContext;
 
             expect(body.isAuthenticated).toBe(false);
         });
@@ -148,7 +148,7 @@ describe('AuthMiddleware', () => {
                 },
                 env
             );
-            const body = await res.json();
+            const body = await res.json() as AuthContext;
 
             expect(body.isAuthenticated).toBe(true);
             expect(body.isModerator).toBe(true);
@@ -165,7 +165,7 @@ describe('AuthMiddleware', () => {
                 },
                 env
             );
-            const body = await res.json();
+            const body = await res.json() as AuthContext;
 
             expect(body.isAuthenticated).toBe(true);
             expect(body.isModerator).toBe(false);
@@ -181,7 +181,7 @@ describe('AuthMiddleware', () => {
                 },
                 env
             );
-            const body = await res.json();
+            const body = await res.json() as AuthContext;
 
             expect(body.isAuthenticated).toBe(true);
             expect(body.userDiscordId).toBeUndefined();
@@ -214,7 +214,7 @@ describe('AuthMiddleware', () => {
                 },
                 env
             );
-            const body = await res.json();
+            const body = await res.json() as AuthContext;
 
             expect(body.isAuthenticated).toBe(true);
             expect(body.authSource).toBe('web');
@@ -239,7 +239,7 @@ describe('AuthMiddleware', () => {
                 },
                 env
             );
-            const body = await res.json();
+            const body = await res.json() as AuthContext;
 
             expect(body.userName).toBe('JWTUser');
         });
@@ -256,7 +256,7 @@ describe('AuthMiddleware', () => {
                 },
                 env
             );
-            const body = await res.json();
+            const body = await res.json() as AuthContext;
 
             expect(body.isAuthenticated).toBe(false);
         });
@@ -276,7 +276,7 @@ describe('AuthMiddleware', () => {
                 },
                 env
             );
-            const body = await res.json();
+            const body = await res.json() as AuthContext;
 
             expect(body.isAuthenticated).toBe(false);
         });
@@ -291,7 +291,7 @@ describe('AuthMiddleware', () => {
                 },
                 env
             );
-            const body = await res.json();
+            const body = await res.json() as AuthContext;
 
             expect(body.isAuthenticated).toBe(false);
         });
@@ -306,7 +306,7 @@ describe('AuthMiddleware', () => {
                 },
                 env
             );
-            const body = await res.json();
+            const body = await res.json() as AuthContext;
 
             expect(body.isAuthenticated).toBe(false);
         });
@@ -328,7 +328,7 @@ describe('AuthMiddleware', () => {
                 },
                 noJwtEnv
             );
-            const body = await res.json();
+            const body = await res.json() as AuthContext;
 
             expect(body.isAuthenticated).toBe(false);
         });
@@ -348,7 +348,7 @@ describe('AuthMiddleware', () => {
                 },
                 env
             );
-            const body = await res.json();
+            const body = await res.json() as AuthContext;
 
             expect(body.isModerator).toBe(true);
         });
@@ -372,7 +372,7 @@ describe('AuthMiddleware', () => {
             );
 
             expect(res.status).toBe(200);
-            const body = await res.json();
+            const body = await res.json() as { success: boolean };
             expect(body.success).toBe(true);
         });
 
@@ -380,7 +380,7 @@ describe('AuthMiddleware', () => {
             const res = await app.request('/test/protected', {}, env);
 
             expect(res.status).toBe(401);
-            const body = await res.json();
+            const body = await res.json() as { error: string };
             expect(body.error).toBe('Unauthorized');
         });
     });
@@ -424,7 +424,7 @@ describe('AuthMiddleware', () => {
             );
 
             expect(res.status).toBe(403);
-            const body = await res.json();
+            const body = await res.json() as { error: string };
             expect(body.error).toBe('Forbidden');
         });
     });
@@ -447,7 +447,7 @@ describe('AuthMiddleware', () => {
             );
 
             expect(res.status).toBe(200);
-            const body = await res.json();
+            const body = await res.json() as { userDiscordId: string };
             expect(body.userDiscordId).toBe('user-123');
         });
 
@@ -464,7 +464,7 @@ describe('AuthMiddleware', () => {
             );
 
             expect(res.status).toBe(400);
-            const body = await res.json();
+            const body = await res.json() as { error: string };
             expect(body.error).toBe('Bad Request');
         });
     });
@@ -489,7 +489,7 @@ describe('AuthMiddleware', () => {
                 },
                 spaceEnv
             );
-            const body = await res.json();
+            const body = await res.json() as AuthContext;
 
             expect(body.isModerator).toBe(true);
         });
@@ -509,7 +509,7 @@ describe('AuthMiddleware', () => {
                 },
                 singleEnv
             );
-            const body = await res.json();
+            const body = await res.json() as AuthContext;
 
             expect(body.isModerator).toBe(true);
         });
@@ -529,7 +529,7 @@ describe('AuthMiddleware', () => {
                 },
                 emptyEnv
             );
-            const body = await res.json();
+            const body = await res.json() as AuthContext;
 
             expect(body.isModerator).toBe(false);
         });
@@ -553,7 +553,7 @@ describe('AuthMiddleware', () => {
                 },
                 env
             );
-            const body = await res.json();
+            const body = await res.json() as AuthContext;
 
             expect(body.authSource).toBe('bot');
         });
@@ -633,7 +633,7 @@ describe('AuthMiddleware', () => {
                 },
                 signingEnv
             );
-            const body = await res.json();
+            const body = await res.json() as AuthContext;
 
             expect(body.isAuthenticated).toBe(true);
             expect(body.authSource).toBe('bot');
@@ -656,7 +656,7 @@ describe('AuthMiddleware', () => {
                 },
                 signingEnv
             );
-            const body = await res.json();
+            const body = await res.json() as AuthContext;
 
             expect(body.isAuthenticated).toBe(false);
         });
@@ -683,7 +683,7 @@ describe('AuthMiddleware', () => {
                 },
                 signingEnv
             );
-            const body = await res.json();
+            const body = await res.json() as AuthContext;
 
             expect(body.isAuthenticated).toBe(false);
         });
@@ -710,7 +710,7 @@ describe('AuthMiddleware', () => {
                 },
                 signingEnv
             );
-            const body = await res.json();
+            const body = await res.json() as AuthContext;
 
             expect(body.isAuthenticated).toBe(false);
         });
@@ -729,7 +729,7 @@ describe('AuthMiddleware', () => {
                 },
                 signingEnv
             );
-            const body = await res.json();
+            const body = await res.json() as AuthContext;
 
             expect(body.isAuthenticated).toBe(false);
         });
@@ -746,7 +746,7 @@ describe('AuthMiddleware', () => {
                 },
                 signingEnv
             );
-            const body = await res.json();
+            const body = await res.json() as AuthContext;
 
             expect(body.isAuthenticated).toBe(false);
         });
@@ -766,7 +766,7 @@ describe('AuthMiddleware', () => {
                 },
                 signingEnv
             );
-            const body = await res.json();
+            const body = await res.json() as AuthContext;
 
             expect(body.isAuthenticated).toBe(true);
             expect(body.userDiscordId).toBeUndefined();
@@ -796,7 +796,7 @@ describe('AuthMiddleware', () => {
                 },
                 signingEnv
             );
-            const body = await res.json();
+            const body = await res.json() as AuthContext;
 
             expect(body.isAuthenticated).toBe(false);
         });
@@ -838,7 +838,7 @@ describe('AuthMiddleware', () => {
                 },
                 env
             );
-            const body = await res.json();
+            const body = await res.json() as AuthContext;
 
             expect(body.isAuthenticated).toBe(false);
         });
@@ -872,7 +872,7 @@ describe('AuthMiddleware', () => {
                 },
                 env
             );
-            const body = await res.json();
+            const body = await res.json() as AuthContext;
 
             expect(body.isAuthenticated).toBe(false);
         });
@@ -889,7 +889,7 @@ describe('AuthMiddleware', () => {
                 },
                 env
             );
-            const body = await res.json();
+            const body = await res.json() as AuthContext;
 
             expect(body.isAuthenticated).toBe(false);
         });

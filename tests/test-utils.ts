@@ -2,6 +2,7 @@
  * Test utilities and mocks for the presets API tests
  */
 
+import { expect } from 'vitest';
 import type { Env, PresetRow, CategoryRow, VoteRow, CommunityPreset, PresetSubmission, AuthContext } from '../src/types';
 
 // ============================================
@@ -11,6 +12,9 @@ import type { Env, PresetRow, CategoryRow, VoteRow, CommunityPreset, PresetSubmi
 /**
  * Create mock environment with all bindings
  */
+// Default signing secret for tests that need signature validation
+export const TEST_SIGNING_SECRET = 'test-signing-secret';
+
 export function createMockEnv(overrides: Partial<Env> = {}): Env {
     return {
         DB: createMockD1Database(),
@@ -18,6 +22,10 @@ export function createMockEnv(overrides: Partial<Env> = {}): Env {
         API_VERSION: 'v1',
         CORS_ORIGIN: 'http://localhost:3000',
         BOT_API_SECRET: 'test-bot-secret',
+        // Note: BOT_SIGNING_SECRET is NOT set by default
+        // This allows bot auth to work without signatures for most tests
+        // Tests that specifically test signature validation should override this
+        BOT_SIGNING_SECRET: undefined,
         MODERATOR_IDS: '123456789,987654321',
         JWT_SECRET: 'test-jwt-secret',
         PERSPECTIVE_API_KEY: undefined,
@@ -245,7 +253,7 @@ export function createMockD1Database(): D1Database & MockD1Database {
         },
         _queries: queries,
         _bindings: bindings,
-        _setupMock: (fn) => {
+        _setupMock: (fn: (query: string, bindings: unknown[]) => unknown) => {
             mockFn = fn;
         },
         _mockFn: mockFn,
@@ -350,7 +358,59 @@ export function createMockRequest(
 }
 
 /**
- * Create authenticated request headers
+ * Create HMAC signature for bot authentication
+ */
+export async function createBotSignature(
+    timestamp: string,
+    userDiscordId: string,
+    userName: string,
+    secret: string = TEST_SIGNING_SECRET
+): Promise<string> {
+    const message = `${timestamp}:${userDiscordId}:${userName}`;
+    const encoder = new TextEncoder();
+    const key = await crypto.subtle.importKey(
+        'raw',
+        encoder.encode(secret),
+        { name: 'HMAC', hash: 'SHA-256' },
+        false,
+        ['sign']
+    );
+    const signature = await crypto.subtle.sign('HMAC', key, encoder.encode(message));
+    return Array.from(new Uint8Array(signature))
+        .map((b) => b.toString(16).padStart(2, '0'))
+        .join('');
+}
+
+/**
+ * Create authenticated request headers with signature
+ */
+export async function authHeadersWithSignature(
+    token: string,
+    userId?: string,
+    userName?: string
+): Promise<Record<string, string>> {
+    const timestamp = Math.floor(Date.now() / 1000).toString();
+    const userIdStr = userId || '';
+    const userNameStr = userName || '';
+
+    const signature = await createBotSignature(timestamp, userIdStr, userNameStr);
+
+    const headers: Record<string, string> = {
+        Authorization: `Bearer ${token}`,
+        'X-Request-Signature': signature,
+        'X-Request-Timestamp': timestamp,
+    };
+    if (userId) {
+        headers['X-User-Discord-ID'] = userId;
+    }
+    if (userName) {
+        headers['X-User-Discord-Name'] = userName;
+    }
+    return headers;
+}
+
+/**
+ * Create authenticated request headers (without signature - for JWT auth tests)
  */
 export function authHeaders(token: string, userId?: string, userName?: string): Record<string, string> {
     const headers: Record<string, string> = {

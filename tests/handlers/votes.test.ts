@@ -233,7 +233,7 @@ describe('VotesHandler', () => {
             );
 
             expect(res.status).toBe(200);
-            const body = await res.json();
+            const body = await res.json() as { success: boolean; new_vote_count: number };
 
             expect(body.success).toBe(true);
             expect(body.new_vote_count).toBe(1);
@@ -269,7 +269,7 @@ describe('VotesHandler', () => {
             );
 
             expect(res.status).toBe(409);
-            const body = await res.json();
+            const body = await res.json() as { already_voted: boolean };
 
             expect(body.already_voted).toBe(true);
         });
@@ -359,7 +359,7 @@ describe('VotesHandler', () => {
             );
 
             expect(res.status).toBe(200);
-            const body = await res.json();
+            const body = await res.json() as { success: boolean; new_vote_count: number };
 
             expect(body.success).toBe(true);
             expect(body.new_vote_count).toBe(4);
@@ -395,7 +395,7 @@ describe('VotesHandler', () => {
             );
 
             expect(res.status).toBe(200);
-            const body = await res.json();
+            const body = await res.json() as { success: boolean; already_voted: boolean };
 
             expect(body.success).toBe(false);
             expect(body.already_voted).toBe(false);
@@ -443,7 +443,7 @@ describe('VotesHandler', () => {
             );
 
             expect(res.status).toBe(200);
-            const body = await res.json();
+            const body = await res.json() as { has_voted: boolean };
 
             expect(body.has_voted).toBe(true);
         });
@@ -463,7 +463,7 @@ describe('VotesHandler', () => {
             );
 
             expect(res.status).toBe(200);
-            const body = await res.json();
+            const body = await res.json() as { has_voted: boolean };
 
             expect(body.has_voted).toBe(false);
         });

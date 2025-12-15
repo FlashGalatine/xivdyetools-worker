@@ -25,7 +25,7 @@ describe('Index/App', () => {
             const res = await app.request('/', {}, env);
 
             expect(res.status).toBe(200);
-            const body = await res.json();
+            const body = await res.json() as { name: string; version: string; status: string; environment: string };
 
             expect(body.name).toBe('XIV Dye Tools Community Presets API');
             expect(body.version).toBe('v1');
@@ -37,7 +37,7 @@ describe('Index/App', () => {
             const res = await app.request('/health', {}, env);
 
             expect(res.status).toBe(200);
-            const body = await res.json();
+            const body = await res.json() as { status: string; timestamp: string };
 
             expect(body.status).toBe('ok');
             expect(body.timestamp).toBeDefined();
@@ -166,7 +166,7 @@ describe('Index/App', () => {
             const res = await app.request('/api/v1/nonexistent', {}, env);
 
             expect(res.status).toBe(404);
-            const body = await res.json();
+            const body = await res.json() as { error: string; message: string };
 
             expect(body.error).toBe('Not Found');
             expect(body.message).toContain('/api/v1/nonexistent');
@@ -182,7 +182,7 @@ describe('Index/App', () => {
             );
 
             expect(res.status).toBe(404);
-            const body = await res.json();
+            const body = await res.json() as { message: string };
 
             expect(body.message).toContain('POST');
         });
@@ -206,7 +206,7 @@ describe('Index/App', () => {
             const res = await app.request('/__force-error', {}, devEnv);
 
             expect(res.status).toBe(500);
-            const body = await res.json();
+            const body = await res.json() as { message: string; stack?: string };
 
             expect(body.message).toBe('forced error');
             expect(body.stack).toBeDefined();
@@ -217,7 +217,7 @@ describe('Index/App', () => {
             const res = await app.request('/__force-error', {}, testEnv);
 
             expect(res.status).toBe(500);
-            const body = await res.json();
+            const body = await res.json() as { message: string; stack?: string };
 
             expect(body.message).toBe('An unexpected error occurred');
             expect(body.stack).toBeUndefined();
@@ -246,7 +246,7 @@ describe('Index/App', () => {
 
             // In production, the force-error route returns 404 instead of throwing
             expect(res.status).toBe(404);
-            const body = await res.json();
+            const body = await res.json() as { error: string };
             expect(body.error).toBe('Not Found');
         });
     });
