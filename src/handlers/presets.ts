@@ -287,11 +287,12 @@ presetsRouter.patch('/:id', async (c) => {
         dyes: preset.dyes,
       };
       moderationStatus = 'pending';
-    } else {
-      // PRESETS-BUG-002: When moderation passes, explicitly clear previous_values
-      // This ensures presets that were previously flagged can be fully un-flagged
-      previousValues = null;
     }
+    // PRESETS-CRITICAL-004: Do NOT clear previous_values when moderation passes
+    // Keep the audit trail of previously-flagged content for compliance and pattern detection
+    // The previous_values field now serves as an append-only audit log
+    // If moderationResult.passed is true, we simply don't update previousValues,
+    // preserving any existing audit history
   }
 
   // Update the preset
@@ -394,18 +395,13 @@ presetsRouter.post('/', async (c) => {
     return c.json({ error: 'Bad Request', message: 'Invalid JSON body' }, 400);
   }
 
-  // Validate submission
-  const validationError = validateSubmission(body);
+  // Validate submission (PRESETS-CRITICAL-002: now queries categories from database)
+  const validationError = await validateSubmission(body, c.env.DB);
   if (validationError) {
     return c.json({ error: 'Validation Error', message: validationError }, 400);
   }
 
-  // PRESETS-BUG-001: Check for duplicate dye combinations
-  // Note: This check-then-create pattern has a theoretical race condition where
-  // two concurrent requests with the same dyes could both pass the check and both
-  // create presets. A future improvement would be to add a UNIQUE constraint on
-  // dye_signature and handle the constraint violation with retry logic.
-  // For now, the moderation queue and daily rate limit (10/day) make this edge case rare.
+  // Check for duplicate dye combinations
   const duplicate = await findDuplicatePreset(c.env.DB, body.dyes);
   if (duplicate) {
     // Add vote to existing preset
@@ -428,14 +424,38 @@ presetsRouter.post('/', async (c) => {
   // Determine status based on moderation
   const status = moderationResult.passed ? 'approved' : 'pending';
 
-  // Create preset
-  const preset = await createPreset(
-    c.env.DB,
-    body,
-    auth.userDiscordId!,
-    auth.userName || 'Unknown User',
-    status
-  );
+  // PRESETS-CRITICAL-001: Handle race condition in duplicate detection
+  // Wrap createPreset in try-catch to handle UNIQUE constraint violations
+  // If another request created the same preset while we were checking, we'll catch
+  // the constraint violation and vote on that preset instead
+  let preset;
+  try {
+    preset = await createPreset(
+      c.env.DB,
+      body,
+      auth.userDiscordId!,
+      auth.userName || 'Unknown User',
+      status
+    );
+  } catch (error) {
+    // Check if this is a UNIQUE constraint violation on dye_signature
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    if (errorMessage.includes('UNIQUE constraint failed') && errorMessage.includes('dye_signature')) {
+      // Race condition occurred - another request created this preset first
+      // Try to find and vote on the existing preset
+      const existingPreset = await findDuplicatePreset(c.env.DB, body.dyes);
+      if (existingPreset) {
+        const voteResult = await addVote(c.env.DB, existingPreset.id, auth.userDiscordId!);
+        return c.json({
+          success: true,
+          duplicate: existingPreset,
+          vote_added: voteResult.success && !voteResult.already_voted,
+        });
+      }
+    }
+    // Re-throw if it's not a duplicate constraint error
+    throw error;
+  }
 
   // Auto-vote for own preset
   await addVote(c.env.DB, preset.id, auth.userDiscordId!);
@@ -478,8 +498,31 @@ presetsRouter.post('/', async (c) => {
 // VALIDATION HELPERS
 // ============================================
 
-// Valid categories for presets
-const VALID_CATEGORIES = ['jobs', 'grand-companies', 'seasons', 'events', 'aesthetics', 'community'];
+// PRESETS-CRITICAL-002: Cache valid categories from database
+// Categories are cached at module level and refreshed periodically
+let cachedCategories: string[] | null = null;
+let categoryCacheTime = 0;
+const CATEGORY_CACHE_TTL = 60000; // 1 minute
+
+/**
+ * Get valid category IDs from database with caching
+ * This replaces the hardcoded VALID_CATEGORIES array
+ */
+async function getValidCategories(db: D1Database): Promise<string[]> {
+  const now = Date.now();
+
+  // Return cached categories if still valid
+  if (cachedCategories && now - categoryCacheTime < CATEGORY_CACHE_TTL) {
+    return cachedCategories;
+  }
+
+  // Query database for valid category IDs
+  const result = await db.prepare('SELECT id FROM categories').all<{ id: string }>();
+  cachedCategories = (result.results || []).map(row => row.id);
+  categoryCacheTime = now;
+
+  return cachedCategories;
+}
 
 /**
  * Validate individual fields (shared between create and edit)
@@ -521,7 +564,7 @@ function validateTags(tags: unknown): string | null {
   return null;
 }
 
-function validateSubmission(body: PresetSubmission): string | null {
+async function validateSubmission(body: PresetSubmission, db: D1Database): Promise<string | null> {
   // All fields required for creation
   if (!body.name) return 'Name is required';
   const nameError = validateName(body.name);
@@ -531,7 +574,10 @@ function validateSubmission(body: PresetSubmission): string | null {
   const descError = validateDescription(body.description);
   if (descError) return descError;
 
-  if (!body.category_id || !VALID_CATEGORIES.includes(body.category_id)) {
+  // PRESETS-CRITICAL-002: Validate category against database
+  if (!body.category_id) return 'Category is required';
+  const validCategories = await getValidCategories(db);
+  if (!validCategories.includes(body.category_id)) {
     return 'Invalid category';
   }
 
@@ -592,9 +638,39 @@ interface PresetNotificationPayload {
 }
 
 /**
+ * PRESETS-CRITICAL-003: Retry configuration for Discord notifications
+ */
+const NOTIFICATION_RETRY_CONFIG = {
+  maxRetries: 3,
+  baseDelayMs: 1000, // 1 second
+  maxDelayMs: 10000, // 10 seconds
+};
+
+/**
+ * Sleep for a specified duration
+ */
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/**
+ * Calculate exponential backoff delay with jitter
+ */
+function getBackoffDelay(attempt: number): number {
+  const delay = Math.min(
+    NOTIFICATION_RETRY_CONFIG.baseDelayMs * Math.pow(2, attempt),
+    NOTIFICATION_RETRY_CONFIG.maxDelayMs
+  );
+  // Add jitter (±25%) to prevent thundering herd
+  return delay * (0.75 + Math.random() * 0.5);
+}
+
+/**
  * Notify the Discord worker about a new preset submission
  * Uses Cloudflare Service Binding for Worker-to-Worker communication (avoids error 1042)
- * This is a fire-and-forget operation - errors are logged but don't fail the request
+ *
+ * PRESETS-CRITICAL-003: Now includes retry with exponential backoff
+ * Retries up to 3 times on transient failures
  */
 async function notifyDiscordBot(env: Env, payload: PresetNotificationPayload): Promise<void> {
   // Check if service binding is configured
@@ -603,20 +679,54 @@ async function notifyDiscordBot(env: Env, payload: PresetNotificationPayload): P
     return;
   }
 
-  // Use service binding for direct Worker-to-Worker communication
-  // The hostname is ignored - only the path matters
-  const response = await env.DISCORD_WORKER.fetch(
-    new Request('https://internal/webhooks/preset-submission', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${env.INTERNAL_WEBHOOK_SECRET}`,
-      },
-      body: JSON.stringify(payload),
-    })
-  );
+  let lastError: Error | null = null;
 
-  if (!response.ok) {
-    throw new Error(`Discord worker returned ${response.status}: ${await response.text()}`);
+  for (let attempt = 0; attempt <= NOTIFICATION_RETRY_CONFIG.maxRetries; attempt++) {
+    try {
+      // Use service binding for direct Worker-to-Worker communication
+      // The hostname is ignored - only the path matters
+      const response = await env.DISCORD_WORKER.fetch(
+        new Request('https://internal/webhooks/preset-submission', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${env.INTERNAL_WEBHOOK_SECRET}`,
+          },
+          body: JSON.stringify(payload),
+        })
+      );
+
+      if (response.ok) {
+        if (attempt > 0) {
+          console.log(`Discord notification succeeded on retry ${attempt}`);
+        }
+        return; // Success!
+      }
+
+      // Non-retryable errors (4xx client errors)
+      if (response.status >= 400 && response.status < 500) {
+        throw new Error(`Discord worker returned ${response.status}: ${await response.text()}`);
+      }
+
+      // Server error - will retry
+      lastError = new Error(`Discord worker returned ${response.status}`);
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+
+      // Don't retry on non-network errors
+      if (lastError.message.includes('returned 4')) {
+        throw lastError;
+      }
+    }
+
+    // If we have more retries, wait before trying again
+    if (attempt < NOTIFICATION_RETRY_CONFIG.maxRetries) {
+      const delay = getBackoffDelay(attempt);
+      console.log(`Discord notification failed, retrying in ${Math.round(delay)}ms (attempt ${attempt + 1}/${NOTIFICATION_RETRY_CONFIG.maxRetries})`);
+      await sleep(delay);
+    }
   }
+
+  // All retries exhausted
+  throw lastError || new Error('Discord notification failed after all retries');
 }

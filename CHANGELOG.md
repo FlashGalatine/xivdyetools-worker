@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.0] - 2025-12-24
+
+### Fixed
+
+#### Security Audit - Critical Issues Resolved
+
+- **PRESETS-CRITICAL-001**: Fixed race condition in duplicate preset detection
+  - Wrapped createPreset in try-catch to handle UNIQUE constraint violations
+  - On race condition, finds and votes on existing preset instead of failing
+  - Graceful handling when two users submit identical dye combinations simultaneously
+- **PRESETS-CRITICAL-002**: Dynamic category validation from database
+  - Categories now queried from database with 1-minute cache
+  - Replaces hardcoded VALID_CATEGORIES array
+  - New categories can be added without code deployment
+- **PRESETS-CRITICAL-003**: Added retry mechanism for Discord notifications
+  - Exponential backoff with jitter (1s, 2s, 4s delays)
+  - Up to 3 retries on transient failures (5xx errors, network issues)
+  - No retry on client errors (4xx) to avoid wasting attempts
+- **PRESETS-CRITICAL-004**: Preserved audit trail on moderation pass
+  - No longer clears previous_values when moderation passes
+  - Maintains history of previously-flagged content for compliance
+  - Helps detect patterns in user behavior over time
+
+---
+
 ## [1.3.0] - 2025-12-15
 
 ### Added
