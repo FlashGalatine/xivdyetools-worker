@@ -20,6 +20,7 @@ import { publicRateLimitMiddleware } from './middleware/rate-limit.js';
 import { requestIdMiddleware, getRequestId } from './middleware/request-id.js';
 import { loggerMiddleware, getLogger } from './middleware/logger.js';
 import { validateEnv, logValidationErrors } from './utils/env-validation.js';
+import { ErrorCode } from './utils/api-response.js';
 
 // Extend Hono context with our custom variables
 type Variables = {
@@ -54,7 +55,7 @@ app.use('*', async (c, next) => {
       logValidationErrors(result.errors);
       // In production, fail fast on misconfiguration
       if (c.env.ENVIRONMENT === 'production') {
-        return c.json({ error: 'Service misconfigured' }, 500);
+        return c.json({ success: false, error: ErrorCode.SERVICE_UNAVAILABLE, message: 'Service misconfigured' }, 500);
       }
       // In development, log warnings but continue
       const logger = getLogger(c);
@@ -173,7 +174,7 @@ app.get('/health', (c) => {
 // Test-only route to exercise global error handler without exposing in production
 app.get('/__force-error', (c) => {
   if (c.env.ENVIRONMENT === 'production') {
-    return c.json({ error: 'Not Found' }, 404);
+    return c.json({ success: false, error: ErrorCode.NOT_FOUND, message: 'Not found' }, 404);
   }
   throw new Error('forced error');
 });
@@ -196,7 +197,8 @@ app.route('/api/v1/moderation', moderationRouter);
 app.notFound((c) => {
   return c.json(
     {
-      error: 'Not Found',
+      success: false,
+      error: ErrorCode.NOT_FOUND,
       message: `Route ${c.req.method} ${c.req.path} not found`,
     },
     404
@@ -221,7 +223,8 @@ app.onError((err, c) => {
 
   return c.json(
     {
-      error: 'Internal Server Error',
+      success: false,
+      error: ErrorCode.INTERNAL_ERROR,
       message: isDev ? err.message : 'An unexpected error occurred',
       requestId,
       ...(isDev && { stack: err.stack }),

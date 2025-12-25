@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.4] - 2025-12-24
+
+### Added
+
+- **PRESETS-MED-002**: Standardized API response utilities
+  - Created `src/utils/api-response.ts` with consistent error response format
+  - `ErrorCode` constants using `SCREAMING_SNAKE_CASE` for machine-readability
+  - Helper functions: `notFoundResponse()`, `forbiddenResponse()`, `validationErrorResponse()`, `invalidJsonResponse()`, `internalErrorResponse()`
+  - All error responses now follow format: `{ success: false, error: "CODE", message: "..." }`
+
+### Fixed
+
+- **PRESETS-MED-001**: Added cascade delete integration tests
+  - 3 new tests verifying vote deletion when preset is deleted
+  - Tests verify correct SQL execution order (votes before presets)
+  - Tests verify correct preset ID binding to both DELETE queries
+
+---
+
 ## [1.4.3] - 2025-12-24
 
 ### Fixed

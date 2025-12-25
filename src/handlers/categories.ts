@@ -5,6 +5,7 @@
 
 import { Hono } from 'hono';
 import type { Env, AuthContext, CategoryMeta, CategoryRow } from '../types.js';
+import { notFoundResponse } from '../utils/api-response.js';
 
 type Variables = {
   auth: AuthContext;
@@ -91,7 +92,7 @@ categoriesRouter.get('/:id', async (c) => {
   >();
 
   if (!row) {
-    return c.json({ error: 'Not Found', message: 'Category not found' }, 404);
+    return notFoundResponse(c, 'Category');
   }
 
   const category: CategoryMeta = {

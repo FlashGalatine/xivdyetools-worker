@@ -168,7 +168,7 @@ describe('Index/App', () => {
             expect(res.status).toBe(404);
             const body = await res.json() as { error: string; message: string };
 
-            expect(body.error).toBe('Not Found');
+            expect(body.error).toBe('NOT_FOUND');
             expect(body.message).toContain('/api/v1/nonexistent');
         });
 
@@ -247,7 +247,7 @@ describe('Index/App', () => {
             // In production, the force-error route returns 404 instead of throwing
             expect(res.status).toBe(404);
             const body = await res.json() as { error: string };
-            expect(body.error).toBe('Not Found');
+            expect(body.error).toBe('NOT_FOUND');
         });
     });
 

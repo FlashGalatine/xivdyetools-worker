@@ -237,7 +237,7 @@ describe('ModerationHandler', () => {
 
             expect(res.status).toBe(400);
             const body = await res.json() as { error: string };
-            expect(body.error).toBe('Validation Error');
+            expect(body.error).toBe('VALIDATION_ERROR');
         });
 
         it('should return 400 for missing status', async () => {
@@ -420,7 +420,7 @@ describe('ModerationHandler', () => {
 
             expect(res.status).toBe(400);
             const body = await res.json() as { error: string; message: string };
-            expect(body.error).toBe('Bad Request');
+            expect(body.error).toBe('INVALID_JSON');
             expect(body.message).toContain('Invalid JSON');
         });
 
@@ -457,7 +457,7 @@ describe('ModerationHandler', () => {
 
             expect(res.status).toBe(500);
             const body = await res.json() as { error: string; message: string };
-            expect(body.error).toBe('Server Error');
+            expect(body.error).toBe('INTERNAL_ERROR');
             expect(body.message).toBe('Failed to revert preset');
         });
 

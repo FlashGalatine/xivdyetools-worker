@@ -7,6 +7,12 @@ import { Hono } from 'hono';
 import type { Env, AuthContext, PresetStatus } from '../types.js';
 import { requireModerator } from '../middleware/auth.js';
 import { getPresetById, getPendingPresets, updatePresetStatus, revertPreset } from '../services/preset-service.js';
+import {
+  invalidJsonResponse,
+  validationErrorResponse,
+  notFoundResponse,
+  internalErrorResponse,
+} from '../utils/api-response.js';
 
 type Variables = {
   auth: AuthContext;
@@ -44,25 +50,19 @@ moderationRouter.patch('/:presetId/status', async (c) => {
   try {
     body = await c.req.json();
   } catch {
-    return c.json({ error: 'Bad Request', message: 'Invalid JSON body' }, 400);
+    return invalidJsonResponse(c);
   }
 
   // Validate status
   const validStatuses: PresetStatus[] = ['approved', 'rejected', 'flagged', 'pending'];
   if (!body.status || !validStatuses.includes(body.status)) {
-    return c.json(
-      {
-        error: 'Validation Error',
-        message: `Status must be one of: ${validStatuses.join(', ')}`,
-      },
-      400
-    );
+    return validationErrorResponse(c, `Status must be one of: ${validStatuses.join(', ')}`);
   }
 
   // Get current preset
   const preset = await getPresetById(c.env.DB, presetId);
   if (!preset) {
-    return c.json({ error: 'Not Found', message: 'Preset not found' }, 404);
+    return notFoundResponse(c, 'Preset');
   }
 
   // Log moderation action
@@ -103,41 +103,29 @@ moderationRouter.patch('/:presetId/revert', async (c) => {
   try {
     body = await c.req.json();
   } catch {
-    return c.json({ error: 'Bad Request', message: 'Invalid JSON body' }, 400);
+    return invalidJsonResponse(c);
   }
 
   // Validate reason
   if (!body.reason || body.reason.length < 10 || body.reason.length > 200) {
-    return c.json(
-      {
-        error: 'Validation Error',
-        message: 'Reason must be 10-200 characters',
-      },
-      400
-    );
+    return validationErrorResponse(c, 'Reason must be 10-200 characters');
   }
 
   // Get current preset
   const preset = await getPresetById(c.env.DB, presetId);
   if (!preset) {
-    return c.json({ error: 'Not Found', message: 'Preset not found' }, 404);
+    return notFoundResponse(c, 'Preset');
   }
 
   // Check if there are previous values to revert to
   if (!preset.previous_values) {
-    return c.json(
-      {
-        error: 'Bad Request',
-        message: 'This preset has no previous values to revert to',
-      },
-      400
-    );
+    return validationErrorResponse(c, 'This preset has no previous values to revert to');
   }
 
   // Perform the revert
   const revertedPreset = await revertPreset(c.env.DB, presetId);
   if (!revertedPreset) {
-    return c.json({ error: 'Server Error', message: 'Failed to revert preset' }, 500);
+    return internalErrorResponse(c, 'Failed to revert preset');
   }
 
   // Log moderation action

@@ -8,6 +8,15 @@ import type { Env, AuthContext, PresetFilters, PresetSubmission, PresetEditReque
 import { requireAuth, requireUserContext } from '../middleware/auth.js';
 import { requireNotBannedCheck } from '../middleware/ban-check.js';
 import {
+  ErrorCode,
+  errorResponse,
+  invalidJsonResponse,
+  validationErrorResponse,
+  forbiddenResponse,
+  notFoundResponse,
+  internalErrorResponse,
+} from '../utils/api-response.js';
+import {
   getPresets,
   getFeaturedPresets,
   getPresetById,
@@ -130,7 +139,7 @@ presetsRouter.patch('/refresh-author', async (c) => {
 
   // Guard against undefined userDiscordId (defensive coding)
   if (!auth.userDiscordId) {
-    return c.json({ error: 'Bad Request', message: 'User ID required for author refresh' }, 400);
+    return validationErrorResponse(c, 'User ID required for author refresh');
   }
 
   // Update all presets by this user to use their current display name
@@ -171,12 +180,12 @@ presetsRouter.delete('/:id', async (c) => {
   // Get preset to check ownership
   const preset = await getPresetById(c.env.DB, id);
   if (!preset) {
-    return c.json({ error: 'Not Found', message: 'Preset not found' }, 404);
+    return notFoundResponse(c, 'Preset');
   }
 
   // Only owner or moderator can delete
   if (preset.author_discord_id !== auth.userDiscordId && !auth.isModerator) {
-    return c.json({ error: 'Forbidden', message: "Cannot delete another user's preset" }, 403);
+    return forbiddenResponse(c, "Cannot delete another user's preset");
   }
 
   // Delete votes and preset in transaction
@@ -214,12 +223,12 @@ presetsRouter.patch('/:id', async (c) => {
   // Get preset to check ownership
   const preset = await getPresetById(c.env.DB, id);
   if (!preset) {
-    return c.json({ error: 'Not Found', message: 'Preset not found' }, 404);
+    return notFoundResponse(c, 'Preset');
   }
 
   // Only owner can edit (moderators cannot edit others' presets)
   if (preset.author_discord_id !== auth.userDiscordId) {
-    return c.json({ error: 'Forbidden', message: 'You can only edit your own presets' }, 403);
+    return forbiddenResponse(c, 'You can only edit your own presets');
   }
 
   // Parse request body
@@ -227,18 +236,18 @@ presetsRouter.patch('/:id', async (c) => {
   try {
     body = await c.req.json<PresetEditRequest>();
   } catch {
-    return c.json({ error: 'Bad Request', message: 'Invalid JSON body' }, 400);
+    return invalidJsonResponse(c);
   }
 
   // Check if any updates provided
   if (!body.name && !body.description && !body.dyes && !body.tags) {
-    return c.json({ error: 'Bad Request', message: 'No updates provided' }, 400);
+    return validationErrorResponse(c, 'No updates provided');
   }
 
   // Validate provided fields
   const validationError = validateEditRequest(body);
   if (validationError) {
-    return c.json({ error: 'Validation Error', message: validationError }, 400);
+    return validationErrorResponse(c, validationError);
   }
 
   // If dyes are being changed, check for duplicates (excluding this preset)
@@ -248,7 +257,7 @@ presetsRouter.patch('/:id', async (c) => {
       return c.json(
         {
           success: false,
-          error: 'duplicate_dyes',
+          error: ErrorCode.DUPLICATE_RESOURCE,
           message: 'This dye combination already exists',
           duplicate: {
             id: duplicate.id,
@@ -307,7 +316,7 @@ presetsRouter.patch('/:id', async (c) => {
   );
 
   if (!updatedPreset) {
-    return c.json({ error: 'Server Error', message: 'Failed to update preset' }, 500);
+    return internalErrorResponse(c, 'Failed to update preset');
   }
 
   // If flagged, notify Discord for moderation
@@ -348,7 +357,7 @@ presetsRouter.get('/:id', async (c) => {
   const preset = await getPresetById(c.env.DB, id);
 
   if (!preset) {
-    return c.json({ error: 'Not Found', message: 'Preset not found' }, 404);
+    return notFoundResponse(c, 'Preset');
   }
 
   return c.json(preset);
@@ -378,7 +387,8 @@ presetsRouter.post('/', async (c) => {
   if (!rateLimitResult.allowed) {
     return c.json(
       {
-        error: 'Rate Limit Exceeded',
+        success: false,
+        error: ErrorCode.RATE_LIMITED,
         message: `You've reached your daily submission limit (10 per day). Try again tomorrow.`,
         remaining: 0,
         reset_at: rateLimitResult.resetAt.toISOString(),
@@ -392,13 +402,13 @@ presetsRouter.post('/', async (c) => {
   try {
     body = await c.req.json<PresetSubmission>();
   } catch {
-    return c.json({ error: 'Bad Request', message: 'Invalid JSON body' }, 400);
+    return invalidJsonResponse(c);
   }
 
   // Validate submission (PRESETS-CRITICAL-002: now queries categories from database)
   const validationError = await validateSubmission(body, c.env.DB);
   if (validationError) {
-    return c.json({ error: 'Validation Error', message: validationError }, 400);
+    return validationErrorResponse(c, validationError);
   }
 
   // Check for duplicate dye combinations

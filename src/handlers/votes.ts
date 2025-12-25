@@ -7,6 +7,7 @@ import { Hono } from 'hono';
 import type { Env, AuthContext, VoteResponse } from '../types.js';
 import { requireAuth, requireUserContext } from '../middleware/auth.js';
 import { requireNotBannedCheck } from '../middleware/ban-check.js';
+import { notFoundResponse } from '../utils/api-response.js';
 
 type Variables = {
   auth: AuthContext;
@@ -162,7 +163,7 @@ votesRouter.post('/:presetId', async (c) => {
     .first();
 
   if (!preset) {
-    return c.json({ error: 'Not Found', message: 'Preset not found' }, 404);
+    return notFoundResponse(c, 'Preset');
   }
 
   const result = await addVote(c.env.DB, presetId, auth.userDiscordId!);
@@ -196,7 +197,7 @@ votesRouter.delete('/:presetId', async (c) => {
     .first();
 
   if (!preset) {
-    return c.json({ error: 'Not Found', message: 'Preset not found' }, 404);
+    return notFoundResponse(c, 'Preset');
   }
 
   const result = await removeVote(c.env.DB, presetId, auth.userDiscordId!);

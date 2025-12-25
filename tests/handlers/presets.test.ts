@@ -616,7 +616,7 @@ describe('PresetsHandler', () => {
 
             expect(res.status).toBe(429);
             const body = await res.json() as { error: string };
-            expect(body.error).toContain('Rate Limit');
+            expect(body.error).toBe('RATE_LIMITED');
         });
 
         it('should handle duplicate dye combination', async () => {
@@ -767,6 +767,111 @@ describe('PresetsHandler', () => {
 
             expect(res.status).toBe(404);
         });
+
+        // ============================================
+        // PRESETS-MED-001: Cascade Delete Integration Tests
+        // ============================================
+        // These tests verify that deleting a preset also deletes its associated votes
+
+        it('should cascade delete votes when deleting a preset', async () => {
+            const mockRow = createMockPresetRow({
+                id: 'preset-with-votes',
+                author_discord_id: '123',
+            });
+            mockDb._setupMock(() => mockRow);
+
+            const res = await app.request(
+                '/api/v1/presets/preset-with-votes',
+                {
+                    method: 'DELETE',
+                    headers: {
+                        Authorization: 'Bearer test-bot-secret',
+                        'X-User-Discord-ID': '123',
+                    },
+                },
+                env
+            );
+
+            expect(res.status).toBe(200);
+
+            // Verify both delete queries were executed (CASCADE DELETE behavior)
+            const voteDeleteQuery = mockDb._queries.find(q =>
+                q.includes('DELETE FROM votes WHERE preset_id')
+            );
+            const presetDeleteQuery = mockDb._queries.find(q =>
+                q.includes('DELETE FROM presets WHERE id')
+            );
+
+            expect(voteDeleteQuery).toBeDefined();
+            expect(presetDeleteQuery).toBeDefined();
+        });
+
+        it('should bind the correct preset ID to both cascade delete queries', async () => {
+            const presetId = 'specific-preset-id';
+            const mockRow = createMockPresetRow({
+                id: presetId,
+                author_discord_id: '123',
+            });
+            mockDb._setupMock(() => mockRow);
+
+            await app.request(
+                `/api/v1/presets/${presetId}`,
+                {
+                    method: 'DELETE',
+                    headers: {
+                        Authorization: 'Bearer test-bot-secret',
+                        'X-User-Discord-ID': '123',
+                    },
+                },
+                env
+            );
+
+            // Find bindings that include the preset ID
+            // Both the vote delete and preset delete should bind the same ID
+            const presetIdBindings = mockDb._bindings.filter(b =>
+                b.includes(presetId)
+            );
+
+            // Should have at least 2 bindings with the preset ID:
+            // 1. DELETE FROM votes WHERE preset_id = ?
+            // 2. DELETE FROM presets WHERE id = ?
+            expect(presetIdBindings.length).toBeGreaterThanOrEqual(2);
+        });
+
+        it('should execute delete operations in correct order (votes first, then preset)', async () => {
+            const mockRow = createMockPresetRow({
+                id: 'order-test-preset',
+                author_discord_id: '123',
+            });
+            mockDb._setupMock(() => mockRow);
+
+            await app.request(
+                '/api/v1/presets/order-test-preset',
+                {
+                    method: 'DELETE',
+                    headers: {
+                        Authorization: 'Bearer test-bot-secret',
+                        'X-User-Discord-ID': '123',
+                    },
+                },
+                env
+            );
+
+            // Find indices of delete queries
+            const voteDeleteIndex = mockDb._queries.findIndex(q =>
+                q.includes('DELETE FROM votes')
+            );
+            const presetDeleteIndex = mockDb._queries.findIndex(q =>
+                q.includes('DELETE FROM presets WHERE id')
+            );
+
+            // Both queries should exist
+            expect(voteDeleteIndex).toBeGreaterThan(-1);
+            expect(presetDeleteIndex).toBeGreaterThan(-1);
+
+            // Votes should be deleted before preset (to maintain referential integrity)
+            expect(voteDeleteIndex).toBeLessThan(presetDeleteIndex);
+        });
     });
 
     // ============================================
@@ -900,7 +1005,7 @@ describe('PresetsHandler', () => {
 
             expect(res.status).toBe(409);
             const body = await res.json() as { error: string };
-            expect(body.error).toBe('duplicate_dyes');
+            expect(body.error).toBe('DUPLICATE_RESOURCE');
         });
 
         it('should validate edit request fields', async () => {
@@ -1391,7 +1496,7 @@ describe('PresetsHandler', () => {
 
             expect(res.status).toBe(500);
             const body = await res.json() as { error: string; message: string };
-            expect(body.error).toBe('Server Error');
+            expect(body.error).toBe('INTERNAL_ERROR');
             expect(body.message).toBe('Failed to update preset');
         });
 

@@ -192,7 +192,7 @@ describe('CategoriesHandler', () => {
             expect(res.status).toBe(404);
             const body = await res.json() as { error: string; message: string };
 
-            expect(body.error).toBe('Not Found');
+            expect(body.error).toBe('NOT_FOUND');
             expect(body.message).toBe('Category not found');
         });
 

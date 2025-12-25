@@ -13,6 +13,7 @@
 import type { Context, Next } from 'hono';
 import type { Env } from '../types.js';
 import type { AuthContext } from '@xivdyetools/types';
+import { ErrorCode } from '../utils/api-response.js';
 
 type Variables = {
   auth: AuthContext;
@@ -71,9 +72,9 @@ export async function requireNotBanned(
     if (banned) {
       return c.json(
         {
-          error: 'Forbidden',
+          success: false,
+          error: ErrorCode.USER_BANNED,
           message: 'You have been banned from using Preset Palettes.',
-          code: 'USER_BANNED',
         },
         403
       );
@@ -144,9 +145,9 @@ export async function requireNotBannedCheck(
     if (banned) {
       return c.json(
         {
-          error: 'Forbidden',
+          success: false,
+          error: ErrorCode.USER_BANNED,
           message: 'You have been banned from using Preset Palettes.',
-          code: 'USER_BANNED',
         },
         403
       );

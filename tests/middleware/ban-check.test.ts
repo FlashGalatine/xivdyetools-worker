@@ -113,10 +113,10 @@ describe('BanCheckMiddleware', () => {
             );
 
             expect(res.status).toBe(403);
-            const body = await res.json() as { error: string; message: string; code: string };
-            expect(body.error).toBe('Forbidden');
+            const body = await res.json() as { success: boolean; error: string; message: string };
+            expect(body.success).toBe(false);
+            expect(body.error).toBe('USER_BANNED');
             expect(body.message).toBe('You have been banned from using Preset Palettes.');
-            expect(body.code).toBe('USER_BANNED');
         });
 
         it('should check correct Discord ID from header', async () => {
@@ -229,9 +229,9 @@ describe('BanCheckMiddleware', () => {
             );
 
             expect(res.status).toBe(403);
-            const body = await res.json() as { error: string; code: string };
-            expect(body.error).toBe('Forbidden');
-            expect(body.code).toBe('USER_BANNED');
+            const body = await res.json() as { success: boolean; error: string; message: string };
+            expect(body.success).toBe(false);
+            expect(body.error).toBe('USER_BANNED');
         });
 
         it('should handle database errors gracefully and return null', async () => {
