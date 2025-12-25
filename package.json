@@ -1,6 +1,6 @@
 {
   "name": "xivdyetools-worker",
-  "version": "1.4.4",
+  "version": "1.4.5",
   "description": "Cloudflare Worker API for XIV Dye Tools Community Presets",
   "type": "module",
   "scripts": {
@@ -18,8 +18,8 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
-    "@xivdyetools/logger": "^1.0.0",
-    "@xivdyetools/types": "^1.0.0",
+    "@xivdyetools/logger": "^1.0.2",
+    "@xivdyetools/types": "^1.1.1",
     "hono": "^4.10.7"
   },
   "devDependencies": {

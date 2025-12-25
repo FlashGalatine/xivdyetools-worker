@@ -1585,8 +1585,8 @@ describe('PresetsHandler', () => {
             });
 
             // Ensure DISCORD_WORKER is not set
-            delete (env as Record<string, unknown>).DISCORD_WORKER;
-            delete (env as Record<string, unknown>).INTERNAL_WEBHOOK_SECRET;
+            delete (env as unknown as Record<string, unknown>).DISCORD_WORKER;
+            delete (env as unknown as Record<string, unknown>).INTERNAL_WEBHOOK_SECRET;
 
             const res = await app.request(
                 '/api/v1/presets',
