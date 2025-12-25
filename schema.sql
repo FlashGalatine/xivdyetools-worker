@@ -75,8 +75,9 @@ CREATE INDEX IF NOT EXISTS idx_presets_name ON presets(name);
 -- Note: D1 doesn't support generated columns, so we'll compute dye_signature in application code
 -- The signature is computed by sorting dye IDs and JSON stringifying: [1,12,40] -> "[1,12,40]"
 -- We store it in a separate column for indexing
+-- PRESETS-CRITICAL-001: UNIQUE constraint prevents duplicate dye combinations at DB level
 ALTER TABLE presets ADD COLUMN dye_signature TEXT;
-CREATE INDEX IF NOT EXISTS idx_presets_dye_signature ON presets(dye_signature);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_presets_dye_signature ON presets(dye_signature);
 
 -- Store pre-edit values for moderation revert capability
 -- JSON: {"name": "...", "description": "...", "tags": [...], "dyes": [...]}
