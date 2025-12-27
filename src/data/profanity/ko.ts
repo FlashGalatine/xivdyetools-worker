@@ -8,4 +8,8 @@
 export const koProfanity: string[] = [
   // Korean profanity
   // List intentionally kept minimal - Perspective API handles most cases
+
+  // Anti-AI-slop terms
+  'ai 쓰레기', // AI trash/garbage
+  'ai 퀄리티 낮음', // Low-quality AI
 ];

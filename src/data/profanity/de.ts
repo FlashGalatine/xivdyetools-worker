@@ -8,4 +8,8 @@
 export const deProfanity: string[] = [
   // German profanity
   // List intentionally kept minimal - Perspective API handles most cases
+
+  // Anti-AI-slop terms
+  'ki-schrott', // AI scrap/junk
+  'ki-füllmaterial', // AI filler material
 ];
