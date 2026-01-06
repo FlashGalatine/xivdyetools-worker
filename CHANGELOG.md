@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.6] - 2026-01-05
+
+### Security
+
+#### Low Priority Audit Fixes (2026-01-05 Security Audit)
+
+- **L1**: Added X-Request-ID format validation
+  - Request IDs are now validated against UUID v4 pattern
+  - Prevents log injection attacks via malformed request IDs
+  - Invalid request IDs are replaced with newly generated UUIDs
+
+---
+
 ## [1.4.5] - 2025-12-24
 
 ### Changed
