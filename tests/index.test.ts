@@ -65,19 +65,19 @@ describe('Index/App', () => {
         });
 
         it('should allow custom domain origin', async () => {
-            env.ADDITIONAL_CORS_ORIGINS = 'https://xivdyetools.projectgalatine.com';
+            env.ADDITIONAL_CORS_ORIGINS = 'https://xivdyetools.app';
             const res = await app.request(
                 '/',
                 {
                     headers: {
-                        Origin: 'https://xivdyetools.projectgalatine.com',
+                        Origin: 'https://xivdyetools.app',
                     },
                 },
                 env
             );
 
             expect(res.headers.get('Access-Control-Allow-Origin')).toBe(
-                'https://xivdyetools.projectgalatine.com'
+                'https://xivdyetools.app'
             );
         });
 

@@ -8,7 +8,7 @@ compatibility_flags = ["nodejs_compat"]
 
 # Custom domain routing
 routes = [
-  { pattern = "api.xivdyetools.projectgalatine.com", custom_domain = true }
+  { pattern = "api.xivdyetools.app", custom_domain = true }
 ]
 
 # Development settings
@@ -37,7 +37,7 @@ CORS_ORIGIN = "http://localhost:5173"
 # Production environment
 [env.production]
 name = "xivdyetools-presets-api"
-vars = { ENVIRONMENT = "production", API_VERSION = "v1", CORS_ORIGIN = "https://xivdyetools.projectgalatine.com", ADDITIONAL_CORS_ORIGINS = "https://xiv-colorexplorer.pages.dev" }
+vars = { ENVIRONMENT = "production", API_VERSION = "v1", CORS_ORIGIN = "https://xivdyetools.app", ADDITIONAL_CORS_ORIGINS = "https://xiv-colorexplorer.pages.dev,https://xivdyetools.projectgalatine.com" }
 
 [[env.production.d1_databases]]
 binding = "DB"
