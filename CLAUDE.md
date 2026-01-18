@@ -24,6 +24,12 @@ npx tsx scripts/migrate-presets.ts > seed.sql
 wrangler d1 execute xivdyetools-presets --local --file=./seed.sql
 ```
 
+### Pre-commit Checklist
+
+```bash
+npm run lint && npm run type-check
+```
+
 ## Architecture
 
 ```
@@ -73,16 +79,22 @@ env.DISCORD_WORKER?.fetch(request)
 
 ## Environment Variables
 
-Set in `wrangler.toml`:
-- `ENVIRONMENT`: development | production
-- `API_VERSION`: v1
-- `CORS_ORIGIN`: Allowed origin for web app
+### Configuration (wrangler.toml)
 
-Set via `wrangler secret put`:
-- `BOT_API_SECRET`: Shared secret for bot authentication
-- `JWT_SECRET`: Shared with OAuth worker for web auth
-- `MODERATOR_IDS`: Comma-separated Discord user IDs
-- `PERSPECTIVE_API_KEY`: Google Perspective API (optional)
+| Variable | Description |
+|----------|-------------|
+| `ENVIRONMENT` | development or production |
+| `API_VERSION` | v1 |
+| `CORS_ORIGIN` | Allowed origin for web app |
+
+### Secrets (wrangler secret put)
+
+| Secret | Description |
+|--------|-------------|
+| `BOT_API_SECRET` | Shared secret for bot authentication |
+| `JWT_SECRET` | Shared with OAuth worker for web auth |
+| `MODERATOR_IDS` | Comma-separated Discord user IDs |
+| `PERSPECTIVE_API_KEY` | Google Perspective API (optional) |
 
 ## API Route Structure
 
@@ -101,3 +113,70 @@ Query params for `GET /presets`: `category`, `search`, `status`, `sort`, `page`,
 - Preset submissions auto-vote for the author
 - Duplicate detection uses `dye_signature` (sorted dye IDs joined)
 - Rate limiting queries presets table by author + creation date (UTC day)
+
+## Security Patterns
+
+### Dual Authentication
+
+Two auth methods checked in order (see `middleware/auth.ts`):
+
+**Bot Authentication:**
+```
+Authorization: Bearer <BOT_API_SECRET>
+X-Request-Signature: HMAC-SHA256(timestamp:userDiscordId:userName)
+X-Request-Timestamp: <unix_timestamp>
+X-User-Discord-ID: <discord_id>
+X-User-Discord-Name: <username>
+```
+
+**Web Authentication:**
+- Bearer token = JWT from OAuth worker
+- HMAC-SHA256 signature verification
+- Algorithm validation: rejects non-HS256 tokens (prevents algorithm confusion)
+
+### Timestamp Validation
+
+Prevents replay attacks:
+- Signature max age: 5 minutes (`SIGNATURE_MAX_AGE_SECONDS = 300`)
+- Clock skew tolerance: 1 minute forward
+
+### Ban Checking
+
+Queries `banned_users` table before write operations:
+- Blocks: POST presets, PATCH presets, POST votes
+- Fails gracefully if table doesn't exist
+
+### Input Validation
+
+- **Parameterized queries**: All user input via `.bind()`
+- **Rate limiting**: 100 req/min per IP for public endpoints
+- Returns 429 with `Retry-After` header
+
+### Moderator Authorization
+
+- IDs stored in `MODERATOR_IDS` secret (comma/space/newline separated)
+- Guards: `requireAuth()`, `requireModerator()`, `requireUserContext()`
+
+## Related Projects
+
+**Dependencies:**
+- `@xivdyetools/types` - Shared type definitions
+- `@xivdyetools/logger` - Structured logging
+- xivdyetools-oauth - JWT verification (shared secret)
+
+**Consumers:**
+- xivdyetools-discord-worker - Service Binding for presets
+- xivdyetools-moderation-worker - Service Binding for moderation
+- xivdyetools-web-app - REST API client
+
+## Deployment Checklist
+
+1. Ensure secrets are set:
+   - `wrangler secret put BOT_API_SECRET`
+   - `wrangler secret put JWT_SECRET`
+   - `wrangler secret put MODERATOR_IDS`
+2. Run database migrations if schema changed: `npm run db:migrate`
+3. Deploy to staging: `npm run deploy`
+4. Test API endpoints (GET /presets, POST with auth)
+5. Deploy to production: `npm run deploy:production`
+6. Verify Service Bindings work from discord-worker
