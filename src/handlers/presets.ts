@@ -27,6 +27,13 @@ import {
   updatePreset,
 } from '../services/preset-service.js';
 import { moderateContent } from '../services/moderation-service.js';
+// PRESETS-REF-001 FIX: Import from centralized validation service
+import {
+  validatePresetName,
+  validatePresetDescription,
+  validatePresetDyes,
+  validatePresetTags,
+} from '../services/validation-service.js';
 import { addVote } from './votes.js';
 import { checkSubmissionRateLimit, getRemainingSubmissions } from '../services/rate-limit-service.js';
 
@@ -543,53 +550,17 @@ async function getValidCategories(db: D1Database): Promise<string[]> {
 }
 
 /**
- * Validate individual fields (shared between create and edit)
+ * Validate preset submission (all fields required)
+ * PRESETS-REF-001 FIX: Uses centralized validators from validation-service
  */
-function validateName(name: string): string | null {
-  if (name.length < 2 || name.length > 50) {
-    return 'Name must be 2-50 characters';
-  }
-  return null;
-}
-
-function validateDescription(description: string): string | null {
-  if (description.length < 10 || description.length > 200) {
-    return 'Description must be 10-200 characters';
-  }
-  return null;
-}
-
-function validateDyes(dyes: unknown): string | null {
-  if (!Array.isArray(dyes) || dyes.length < 2 || dyes.length > 5) {
-    return 'Must include 2-5 dyes';
-  }
-  if (!dyes.every((id) => typeof id === 'number' && id > 0)) {
-    return 'Invalid dye IDs';
-  }
-  return null;
-}
-
-function validateTags(tags: unknown): string | null {
-  if (!Array.isArray(tags)) {
-    return 'Tags must be an array';
-  }
-  if (tags.length > 10) {
-    return 'Maximum 10 tags allowed';
-  }
-  if (tags.some((tag) => typeof tag !== 'string' || tag.length > 30)) {
-    return 'Each tag must be a string of max 30 characters';
-  }
-  return null;
-}
-
 async function validateSubmission(body: PresetSubmission, db: D1Database): Promise<string | null> {
   // All fields required for creation
   if (!body.name) return 'Name is required';
-  const nameError = validateName(body.name);
+  const nameError = validatePresetName(body.name);
   if (nameError) return nameError;
 
   if (!body.description) return 'Description is required';
-  const descError = validateDescription(body.description);
+  const descError = validatePresetDescription(body.description);
   if (descError) return descError;
 
   // PRESETS-CRITICAL-002: Validate category against database
@@ -599,34 +570,38 @@ async function validateSubmission(body: PresetSubmission, db: D1Database): Promi
     return 'Invalid category';
   }
 
-  const dyesError = validateDyes(body.dyes);
+  const dyesError = validatePresetDyes(body.dyes);
   if (dyesError) return dyesError;
 
-  const tagsError = validateTags(body.tags);
+  const tagsError = validatePresetTags(body.tags);
   if (tagsError) return tagsError;
 
   return null;
 }
 
+/**
+ * Validate preset edit request (all fields optional)
+ * PRESETS-REF-001 FIX: Uses centralized validators from validation-service
+ */
 function validateEditRequest(body: PresetEditRequest): string | null {
   // All fields optional for edit, but validate if provided
   if (body.name !== undefined) {
-    const nameError = validateName(body.name);
+    const nameError = validatePresetName(body.name);
     if (nameError) return nameError;
   }
 
   if (body.description !== undefined) {
-    const descError = validateDescription(body.description);
+    const descError = validatePresetDescription(body.description);
     if (descError) return descError;
   }
 
   if (body.dyes !== undefined) {
-    const dyesError = validateDyes(body.dyes);
+    const dyesError = validatePresetDyes(body.dyes);
     if (dyesError) return dyesError;
   }
 
   if (body.tags !== undefined) {
-    const tagsError = validateTags(body.tags);
+    const tagsError = validatePresetTags(body.tags);
     if (tagsError) return tagsError;
   }
 

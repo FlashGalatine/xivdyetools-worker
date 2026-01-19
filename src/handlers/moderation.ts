@@ -13,6 +13,11 @@ import {
   notFoundResponse,
   internalErrorResponse,
 } from '../utils/api-response.js';
+// PRESETS-REF-001 FIX: Import from centralized validation service
+import {
+  validateModerationStatus,
+  validateModerationReason,
+} from '../services/validation-service.js';
 
 type Variables = {
   auth: AuthContext;
@@ -53,10 +58,10 @@ moderationRouter.patch('/:presetId/status', async (c) => {
     return invalidJsonResponse(c);
   }
 
-  // Validate status
-  const validStatuses: PresetStatus[] = ['approved', 'rejected', 'flagged', 'pending'];
-  if (!body.status || !validStatuses.includes(body.status)) {
-    return validationErrorResponse(c, `Status must be one of: ${validStatuses.join(', ')}`);
+  // PRESETS-REF-001 FIX: Use centralized validation
+  const statusError = validateModerationStatus(body.status);
+  if (statusError) {
+    return validationErrorResponse(c, statusError);
   }
 
   // Get current preset
@@ -106,9 +111,10 @@ moderationRouter.patch('/:presetId/revert', async (c) => {
     return invalidJsonResponse(c);
   }
 
-  // Validate reason
-  if (!body.reason || body.reason.length < 10 || body.reason.length > 200) {
-    return validationErrorResponse(c, 'Reason must be 10-200 characters');
+  // PRESETS-REF-001 FIX: Use centralized validation
+  const reasonError = validateModerationReason(body.reason);
+  if (reasonError) {
+    return validationErrorResponse(c, reasonError);
   }
 
   // Get current preset
