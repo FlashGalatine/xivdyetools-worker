@@ -19,12 +19,16 @@ import type { RateLimitResult } from '../types.js';
 const PUBLIC_RATE_LIMIT = {
   maxRequests: 100, // Maximum requests per window
   windowMs: 60_000, // Window size: 1 minute
+  maxTrackedIps: 10_000, // PRESETS-BUG-001 FIX: Maximum IPs to track (prevents memory leak)
 };
 
 /**
  * In-memory store for IP rate limiting
  * Maps IP -> array of request timestamps
  * Note: Resets on worker restart, which is acceptable for defense-in-depth
+ *
+ * PRESETS-BUG-001 FIX: Size is now limited to maxTrackedIps to prevent
+ * unbounded memory growth under DDoS or high-traffic conditions.
  */
 const ipRequestLog = new Map<string, number[]>();
 
@@ -43,6 +47,31 @@ function cleanupOldEntries(): void {
       ipRequestLog.set(ip, filtered);
     }
   });
+}
+
+/**
+ * Enforce maximum tracked IPs limit using LRU-style eviction
+ * Removes oldest entries when limit is exceeded
+ *
+ * PRESETS-BUG-001 FIX: Prevents unbounded memory growth
+ */
+function enforceMaxTrackedIps(): void {
+  if (ipRequestLog.size <= PUBLIC_RATE_LIMIT.maxTrackedIps) {
+    return;
+  }
+
+  // Find and remove entries with oldest last-access time
+  // Map iteration order is insertion order, so oldest entries come first
+  const entriesToRemove = ipRequestLog.size - PUBLIC_RATE_LIMIT.maxTrackedIps;
+  let removed = 0;
+
+  // Get iterator manually to avoid needing downlevelIteration
+  const keys = Array.from(ipRequestLog.keys());
+  for (const ip of keys) {
+    if (removed >= entriesToRemove) break;
+    ipRequestLog.delete(ip);
+    removed++;
+  }
 }
 
 /**
@@ -81,6 +110,8 @@ export function checkPublicRateLimit(ip: string): RateLimitResult {
   // Periodically clean up old entries (roughly every 100 requests)
   if (Math.random() < 0.01) {
     cleanupOldEntries();
+    // PRESETS-BUG-001 FIX: Also enforce max tracked IPs during cleanup
+    enforceMaxTrackedIps();
   }
 
   return { allowed, remaining, resetAt };
