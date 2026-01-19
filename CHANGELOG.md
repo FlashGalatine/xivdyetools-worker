@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.7] - 2026-01-19
+
+### Fixed
+
+- **PRESETS-BUG-001**: Fixed memory leak in IP rate limiter. Added `maxTrackedIps` limit (10,000) with LRU-style eviction to prevent unbounded memory growth under DDoS attacks
+
+### Changed
+
+#### Refactoring (Deep-Dive Audit)
+
+- **PRESETS-REF-001**: Created centralized validation service
+  - New `src/services/validation-service.ts` with shared validators
+  - `PRESET_VALIDATION_RULES` and `MODERATION_VALIDATION_RULES` constants for consistent limits
+  - Generic helpers: `validateStringLength()`, `validateArray()`, `validateEnum()`
+  - Preset validators: `validatePresetName()`, `validatePresetDescription()`, `validatePresetDyes()`, `validatePresetTags()`
+  - Moderation validators: `validateModerationStatus()`, `validateModerationReason()`
+  - `ModerationStatus` type excludes 'hidden' from allowed moderation transitions
+  - Removed ~44 lines of duplicated validation logic from handlers
+
+---
+
 ## [1.4.6] - 2026-01-05
 
 ### Security
