@@ -5,6 +5,7 @@
 
 import type { Context, Next } from 'hono';
 import type { Env, AuthContext } from '../types.js';
+import { base64UrlDecode, base64UrlDecodeBytes } from '@xivdyetools/crypto';
 
 type Variables = {
   auth: AuthContext;
@@ -111,26 +112,12 @@ interface JWTPayload {
   avatar: string | null;
 }
 
-/**
- * Base64URL decode to string
- */
-function base64UrlDecode(str: string): string {
-  let base64 = str.replace(/-/g, '+').replace(/_/g, '/');
-  const padding = base64.length % 4;
-  if (padding) {
-    base64 += '='.repeat(4 - padding);
-  }
-  const decoded = atob(base64);
-  const bytes = new Uint8Array(decoded.length);
-  for (let i = 0; i < decoded.length; i++) {
-    bytes[i] = decoded.charCodeAt(i);
-  }
-  return new TextDecoder().decode(bytes);
-}
+// REFACTOR-001: base64UrlDecode now imported from @xivdyetools/crypto
 
 /**
  * Verify JWT signature, algorithm, and expiration
  * SECURITY: Validates algorithm to prevent JWT algorithm confusion attacks
+ * REFACTOR-001: Uses @xivdyetools/crypto for base64url decoding
  */
 async function verifyJWT(token: string, secret: string): Promise<JWTPayload | null> {
   try {
@@ -163,13 +150,8 @@ async function verifyJWT(token: string, secret: string): Promise<JWTPayload | nu
       ['verify']
     );
 
-    // Decode signature from base64url
-    let sigBase64 = signature.replace(/-/g, '+').replace(/_/g, '/');
-    const sigPadding = sigBase64.length % 4;
-    if (sigPadding) {
-      sigBase64 += '='.repeat(4 - sigPadding);
-    }
-    const sigBytes = Uint8Array.from(atob(sigBase64), (c) => c.charCodeAt(0));
+    // Decode signature from base64url using shared crypto utility
+    const sigBytes = base64UrlDecodeBytes(signature);
 
     const signatureInput = `${encodedHeader}.${encodedPayload}`;
     const isValid = await crypto.subtle.verify(
