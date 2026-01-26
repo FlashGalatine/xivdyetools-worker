@@ -1,179 +1,52 @@
 /**
  * Authentication Middleware
  * Handles bot authentication (BOT_API_SECRET) and web authentication (JWT)
+ *
+ * REFACTOR-003: Now uses @xivdyetools/auth for JWT and bot signature verification
  */
 
 import type { Context, Next } from 'hono';
 import type { Env, AuthContext } from '../types.js';
-import { base64UrlDecode, base64UrlDecodeBytes } from '@xivdyetools/crypto';
+import { verifyJWT as sharedVerifyJWT, verifyBotSignature } from '@xivdyetools/auth';
 
 type Variables = {
   auth: AuthContext;
 };
 
 // ============================================
-// HMAC REQUEST SIGNING (Bot Auth Security)
-// ============================================
-
-// Maximum age of request signature (5 minutes)
-// This provides reasonable protection against replay attacks while allowing for
-// network latency and minor clock skew between services
-const SIGNATURE_MAX_AGE_SECONDS = 300; // 5 minutes
-
-// Clock skew tolerance for future timestamps (1 minute)
-// Allows requests with timestamps slightly in the future due to clock differences
-const CLOCK_SKEW_TOLERANCE_SECONDS = 60;
-
-/**
- * Verify HMAC signature for bot requests
- * This prevents header spoofing attacks by cryptographically
- * binding the user headers to the request
- *
- * Signature format: HMAC-SHA256(timestamp:userDiscordId:userName)
- *
- * SECURITY NOTES:
- * - Timestamp validation prevents replay attacks outside the time window
- * - Within the window, an attacker could replay the exact same request
- * - For complete replay protection, consider adding KV-based signature tracking
- * - The attack requires intercepting the request AND replaying within 2 minutes
- */
-async function verifyBotRequestSignature(
-  signature: string | undefined,
-  timestamp: string | undefined,
-  userDiscordId: string | undefined,
-  userName: string | undefined,
-  signingSecret: string
-): Promise<boolean> {
-  if (!signature || !timestamp) return false;
-
-  // Validate timestamp to prevent replay attacks
-  // Reject requests with timestamps older than 5 minutes OR too far in the future
-  const requestTime = parseInt(timestamp, 10);
-  const now = Math.floor(Date.now() / 1000);
-  const age = now - requestTime;
-
-  if (isNaN(requestTime)) {
-    return false;
-  }
-
-  // Reject if timestamp is too old (> 5 minutes)
-  if (age > SIGNATURE_MAX_AGE_SECONDS) {
-    console.warn('HMAC signature rejected: timestamp too old', {
-      age,
-      maxAge: SIGNATURE_MAX_AGE_SECONDS,
-    });
-    return false;
-  }
-
-  // Reject if timestamp is too far in the future (> 1 minute clock skew)
-  if (age < -CLOCK_SKEW_TOLERANCE_SECONDS) {
-    console.warn('HMAC signature rejected: timestamp too far in future', {
-      age: Math.abs(age),
-      tolerance: CLOCK_SKEW_TOLERANCE_SECONDS,
-    });
-    return false;
-  }
-
-  // Recreate the signed message
-  const message = `${timestamp}:${userDiscordId || ''}:${userName || ''}`;
-
-  try {
-    const encoder = new TextEncoder();
-    const key = await crypto.subtle.importKey(
-      'raw',
-      encoder.encode(signingSecret),
-      { name: 'HMAC', hash: 'SHA-256' },
-      false,
-      ['verify']
-    );
-
-    // Decode hex signature
-    const signatureBytes = new Uint8Array(
-      signature.match(/.{1,2}/g)?.map((byte) => parseInt(byte, 16)) || []
-    );
-
-    return await crypto.subtle.verify('HMAC', key, signatureBytes, encoder.encode(message));
-  } catch {
-    return false;
-  }
-}
-
-// ============================================
 // JWT VERIFICATION (Web Auth)
 // ============================================
 
-interface JWTPayload {
+/**
+ * Extended JWT payload for this application
+ * Includes Discord-specific fields beyond the base JWTPayload
+ */
+interface ExtendedJWTPayload {
   sub: string; // Discord user ID
   iat: number;
   exp: number;
-  iss: string;
-  username: string;
-  global_name: string | null;
-  avatar: string | null;
+  iss?: string;
+  type?: 'access' | 'refresh';
+  username?: string;
+  global_name?: string | null;
+  avatar?: string | null;
 }
 
-// REFACTOR-001: base64UrlDecode now imported from @xivdyetools/crypto
-
 /**
- * Verify JWT signature, algorithm, and expiration
- * SECURITY: Validates algorithm to prevent JWT algorithm confusion attacks
- * REFACTOR-001: Uses @xivdyetools/crypto for base64url decoding
+ * Verify JWT and return extended payload
+ * REFACTOR-003: Uses @xivdyetools/auth for core verification
  */
-async function verifyJWT(token: string, secret: string): Promise<JWTPayload | null> {
-  try {
-    const parts = token.split('.');
-    if (parts.length !== 3) return null;
+async function verifyJWT(token: string, secret: string): Promise<ExtendedJWTPayload | null> {
+  // Use shared JWT verification which handles:
+  // - Algorithm validation (HS256 only)
+  // - Signature verification
+  // - Expiration checking
+  const payload = await sharedVerifyJWT(token, secret);
 
-    const [encodedHeader, encodedPayload, signature] = parts;
+  if (!payload) return null;
 
-    // SECURITY: Validate JWT algorithm before signature verification
-    // This prevents algorithm confusion attacks (e.g., "alg": "none")
-    try {
-      const header = JSON.parse(base64UrlDecode(encodedHeader));
-      if (header.alg !== 'HS256') {
-        console.warn('JWT verification failed: Invalid algorithm', { alg: header.alg });
-        return null;
-      }
-    } catch {
-      console.warn('JWT verification failed: Could not parse header');
-      return null;
-    }
-
-    // Verify signature using HMAC-SHA256
-    const encoder = new TextEncoder();
-    const keyData = encoder.encode(secret);
-    const key = await crypto.subtle.importKey(
-      'raw',
-      keyData,
-      { name: 'HMAC', hash: 'SHA-256' },
-      false,
-      ['verify']
-    );
-
-    // Decode signature from base64url using shared crypto utility
-    const sigBytes = base64UrlDecodeBytes(signature);
-
-    const signatureInput = `${encodedHeader}.${encodedPayload}`;
-    const isValid = await crypto.subtle.verify(
-      'HMAC',
-      key,
-      sigBytes,
-      encoder.encode(signatureInput)
-    );
-
-    if (!isValid) return null;
-
-    // Decode and validate payload
-    const payload: JWTPayload = JSON.parse(base64UrlDecode(encodedPayload));
-
-    // Check expiration
-    const now = Math.floor(Date.now() / 1000);
-    if (payload.exp < now) return null;
-
-    return payload;
-  } catch {
-    return null;
-  }
+  // Cast to extended type - the JSON payload may have additional fields
+  return payload as unknown as ExtendedJWTPayload;
 }
 
 // ============================================
@@ -250,7 +123,8 @@ export async function authMiddleware(
         const signature = c.req.header('X-Request-Signature');
         const timestamp = c.req.header('X-Request-Timestamp');
 
-        const isValidSignature = await verifyBotRequestSignature(
+        // REFACTOR-003: Uses @xivdyetools/auth for bot signature verification
+        const isValidSignature = await verifyBotSignature(
           signature,
           timestamp,
           userDiscordId,
