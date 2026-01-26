@@ -18,7 +18,7 @@ export async function publicRateLimitMiddleware(
   next: Next
 ): Promise<Response | void> {
   const clientIp = getClientIp(c.req.raw);
-  const result = checkPublicRateLimit(clientIp);
+  const result = await checkPublicRateLimit(clientIp);
 
   // Set rate limit headers on all responses
   c.header('X-RateLimit-Limit', '100');

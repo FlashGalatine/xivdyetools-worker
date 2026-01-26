@@ -262,64 +262,63 @@ describe('RateLimitService', () => {
     // ============================================
 
     describe('checkPublicRateLimit', () => {
-        it('should allow first request from new IP', () => {
-            const result = checkPublicRateLimit('192.168.1.1');
+        it('should allow first request from new IP', async () => {
+            const result = await checkPublicRateLimit('192.168.1.1');
 
             expect(result.allowed).toBe(true);
-            // remaining is calculated BEFORE this request is recorded
-            // so for a new IP, remaining is 100
-            expect(result.remaining).toBe(100);
+            // Shared package starts at maxRequests - 1 after first check
+            expect(result.remaining).toBe(99);
             expect(result.resetAt).toBeInstanceOf(Date);
         });
 
-        it('should track multiple requests from same IP', () => {
+        it('should track multiple requests from same IP', async () => {
             const ip = '192.168.1.2';
 
-            // First request - returns 100 remaining (before adding this request)
-            let result = checkPublicRateLimit(ip);
-            expect(result.remaining).toBe(100);
-
-            // Second request - now 1 in log, so returns 99
-            result = checkPublicRateLimit(ip);
+            // First request - remaining is decremented after check
+            let result = await checkPublicRateLimit(ip);
             expect(result.remaining).toBe(99);
 
-            // Third request - now 2 in log, so returns 98
-            result = checkPublicRateLimit(ip);
+            // Second request
+            result = await checkPublicRateLimit(ip);
             expect(result.remaining).toBe(98);
+
+            // Third request
+            result = await checkPublicRateLimit(ip);
+            expect(result.remaining).toBe(97);
         });
 
-        it('should deny requests when limit is reached', () => {
+        it('should deny requests when limit is reached', async () => {
             const ip = '192.168.1.3';
 
             // Exhaust the limit (100 requests)
             for (let i = 0; i < 100; i++) {
-                checkPublicRateLimit(ip);
+                await checkPublicRateLimit(ip);
             }
 
             // 101st request should be denied
-            const result = checkPublicRateLimit(ip);
+            const result = await checkPublicRateLimit(ip);
             expect(result.allowed).toBe(false);
             expect(result.remaining).toBe(0);
         });
 
-        it('should track different IPs independently', () => {
+        it('should track different IPs independently', async () => {
             const ip1 = '192.168.1.4';
             const ip2 = '192.168.1.5';
 
             // Use some of IP1's quota
             for (let i = 0; i < 50; i++) {
-                checkPublicRateLimit(ip1);
+                await checkPublicRateLimit(ip1);
             }
 
-            // IP2 should still have full quota (100 before request is recorded)
-            const result = checkPublicRateLimit(ip2);
-            expect(result.remaining).toBe(100);
+            // IP2 should still have full quota (99 after first request)
+            const result = await checkPublicRateLimit(ip2);
+            expect(result.remaining).toBe(99);
         });
 
-        it('should calculate resetAt correctly based on oldest request in window', () => {
+        it('should calculate resetAt correctly based on oldest request in window', async () => {
             const ip = '192.168.1.6';
 
-            const result = checkPublicRateLimit(ip);
+            const result = await checkPublicRateLimit(ip);
 
             // Reset should be approximately 1 minute from the oldest request
             const now = Date.now();
@@ -330,20 +329,20 @@ describe('RateLimitService', () => {
             expect(resetTime).toBeLessThanOrEqual(now + 61000);
         });
 
-        it('should not add request to log when denied', () => {
+        it('should not add request to log when denied', async () => {
             const ip = '192.168.1.7';
 
             // Exhaust the limit
             for (let i = 0; i < 100; i++) {
-                checkPublicRateLimit(ip);
+                await checkPublicRateLimit(ip);
             }
 
             // Try one more - should be denied
-            const deniedResult = checkPublicRateLimit(ip);
+            const deniedResult = await checkPublicRateLimit(ip);
             expect(deniedResult.allowed).toBe(false);
 
             // Try again - remaining should still be 0 (not negative)
-            const secondDeniedResult = checkPublicRateLimit(ip);
+            const secondDeniedResult = await checkPublicRateLimit(ip);
             expect(secondDeniedResult.remaining).toBe(0);
         });
     });

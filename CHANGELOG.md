@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.10] - 2026-01-25
+
+### Changed
+
+- **REFACTOR-002**: Migrated IP-based rate limiting to `@xivdyetools/rate-limiter` shared package
+  - Uses `MemoryRateLimiter` for public endpoint protection
+  - Uses `PUBLIC_API_LIMITS` preset from shared package
+  - Preserves PRESETS-BUG-001 fix (LRU eviction at 10k entries) via shared implementation
+  - D1-based submission limiting remains unchanged
+
+---
+
 ## [1.4.9] - 2026-01-25
 
 ### Changed
