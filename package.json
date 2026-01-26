@@ -18,7 +18,7 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
-    "@xivdyetools/auth": "file:../xivdyetools-auth",
+    "@xivdyetools/auth": "^1.0.0",
     "@xivdyetools/crypto": "^1.0.0",
     "@xivdyetools/logger": "^1.0.2",
     "@xivdyetools/rate-limiter": "^1.0.0",
