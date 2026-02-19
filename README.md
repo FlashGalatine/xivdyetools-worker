@@ -1,3 +1,5 @@
+# NOTICE! This repo has been DEPRECATED! For the latest updates to the XIV Dye Tools app, see the mono-repo here: https://github.com/FlashGalatine/xivdyetools
+
 # XIV Dye Tools - Community Presets API
 
 **v1.4.6** | Cloudflare Worker API for the XIV Dye Tools Community Presets system.
